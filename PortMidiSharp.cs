@@ -55,7 +55,7 @@ namespace PortMidiSharp
 			PortMidiStream stream;
 			var e = PortMidiMarshal.Pm_OpenOutput (out stream, outputDevice, IntPtr.Zero, 0, null, IntPtr.Zero, 0);
 			if (e != PmError.NoError)
-				throw new MidiException (e, "Failed to open output device {0}");
+				throw new MidiException (e, String.Format ("Failed to open output device {0}", e));
 			return new MidiOutput (stream, outputDevice, 0);
 		}
 	}
@@ -100,9 +100,9 @@ namespace PortMidiSharp
 	{
 		PmDeviceInfo info;
 
-		internal MidiDeviceInfo (PmDeviceInfo info)
+		internal MidiDeviceInfo (IntPtr ptr)
 		{
-			this.info = info;
+			this.info = (PmDeviceInfo) Marshal.PtrToStructure (ptr, typeof (PmDeviceInfo));
 		}
 
 		public string Interface {
@@ -115,7 +115,12 @@ namespace PortMidiSharp
 
 		public bool IsInput { get { return info.Input != 0; } }
 		public bool IsOutput { get { return info.Output != 0; } }
-		public bool IsOpen { get { return info.Opened != 0; } }
+		public bool IsOpened { get { return info.Opened != 0; } }
+
+		public override string ToString ()
+		{
+			return String.Format ("{0} - {1} ({2} {3})", Interface, Name, IsInput ? (IsOutput ? "I/O" : "Input") : (IsOutput ? "Output" : "N/A"), IsOpened ? "open" : String.Empty);
+		}
 	}
 
 	public abstract class MidiStream : IDisposable
@@ -182,12 +187,16 @@ namespace PortMidiSharp
 
 		public void Write (PmTimestamp when, MidiMessage msg)
 		{
-			PortMidiMarshal.Pm_WriteShort (stream, when, msg);
+			var ret = PortMidiMarshal.Pm_WriteShort (stream, when, msg);
+			if (ret != PmError.NoError)
+				throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
 		}
 
 		public void WriteSysEx (PmTimestamp when, byte [] sysex)
 		{
-			PortMidiMarshal.Pm_WriteSysEx (stream, when, sysex);
+			var ret = PortMidiMarshal.Pm_WriteSysEx (stream, when, sysex);
+			if (ret != PmError.NoError)
+				throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
 		}
 
 		public void Write (MidiEvent [] buffer)
@@ -200,7 +209,9 @@ namespace PortMidiSharp
 			var gch = GCHandle.Alloc (buffer);
 			try {
 				var ptr = Marshal.UnsafeAddrOfPinnedArrayElement (buffer, index);
-				PortMidiMarshal.Pm_Write (stream, ptr, length);
+				var ret = PortMidiMarshal.Pm_Write (stream, ptr, length);
+				if (ret != PmError.NoError)
+					throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
 			} finally {
 				gch.Free ();
 			}
@@ -305,7 +316,7 @@ namespace PortMidiSharp
 		public static extern PmDeviceID Pm_GetDefaultOutputDeviceID ();
 
 		[DllImport ("portmidi")]
-		public static extern PmDeviceInfo Pm_GetDeviceInfo (PmDeviceID id);
+		public static extern IntPtr Pm_GetDeviceInfo (PmDeviceID id);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_OpenInput (
@@ -367,12 +378,17 @@ namespace PortMidiSharp
 	[StructLayout (LayoutKind.Sequential)]
 	struct PmDeviceInfo
 	{
-		public int StructVersion;
+		public int StructVersion; // it is not actually used.
 		public IntPtr Interface; // char*
 		public IntPtr Name; // char*
 		public int Input; // 1 or 0
 		public int Output; // 1 or 0
 		public int Opened;
+
+		public override string ToString ()
+		{
+			return String.Format ("{0},{1:X},{2:X},{3},{4},{5}", StructVersion, Interface, Name, Input, Output, Opened);
+		}
 	}
 }
 
