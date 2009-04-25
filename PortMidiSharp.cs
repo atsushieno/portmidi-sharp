@@ -1,7 +1,7 @@
 // FIXMEs:
 // - some bad mappings:
 //	- C int -> C# int
-//	- C long -> C# long
+//	- C long -> C# int
 // not sure what they should be.
 // The sources are wrong. Those C code should not use int and long for each.
 using System;
@@ -9,9 +9,9 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using PmDeviceID = System.Int32;
-using PmTimestamp = System.Int64;
+using PmTimestamp = System.Int32;
 using PortMidiStream = System.IntPtr;
-using PmMessage = System.Int64;
+using PmMessage = System.Int32;
 using PmError = PortMidiSharp.MidiErrorType;
 
 namespace PortMidiSharp
@@ -167,7 +167,7 @@ namespace PortMidiSharp
 		{
 		}
 
-		public int Read (MidiEvent [] buffer, long length)
+		public int Read (MidiEvent [] buffer, int length)
 		{
 			return PortMidiMarshal.Pm_Read (stream, buffer, length);
 		}
@@ -175,7 +175,7 @@ namespace PortMidiSharp
 
 	public class MidiOutput : MidiStream
 	{
-		public MidiOutput (PortMidiStream stream, PmDeviceID outputDevice, long latency)
+		public MidiOutput (PortMidiStream stream, PmDeviceID outputDevice, int latency)
 			: base (stream, outputDevice)
 		{
 		}
@@ -239,7 +239,7 @@ namespace PortMidiSharp
 	{
 		PmMessage v;
 
-		public MidiMessage (long status, long data1, long data2)
+		public MidiMessage (int status, int data1, int data2)
 		{
 			v = ((((data2) << 16) & 0xFF0000) | (((data1) << 8) & 0xFF00) | ((status) & 0xFF)); 
 		}
@@ -252,7 +252,7 @@ namespace PortMidiSharp
 	public delegate PmTimestamp MidiTimeProcDelegate (IntPtr timeInfo);
 
 	[Flags]
-	public enum MidiFilter : long
+	public enum MidiFilter : int
 	{
 		Active = 1 << 0x0E,
 		SysEx = 1 << 0x00,
@@ -323,7 +323,7 @@ namespace PortMidiSharp
 			out PortMidiStream stream,
 			PmDeviceID inputDevice,
 			IntPtr inputDriverInfo,
-			long bufferSize,
+			int bufferSize,
 			MidiTimeProcDelegate timeProc,
 			IntPtr timeInfo);
 
@@ -332,16 +332,16 @@ namespace PortMidiSharp
 			out PortMidiStream stream,
 			PmDeviceID outputDevice,
 			IntPtr outputDriverInfo,
-			long bufferSize,
+			int bufferSize,
 			MidiTimeProcDelegate time_proc,
 			IntPtr time_info,
-			long latency);
+			int latency);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_SetFilter (PortMidiStream stream, MidiFilter filters);
 
 		// TODO
-		public static long Pm_Channel (int channel) { return 1 << channel; }
+		public static int Pm_Channel (int channel) { return 1 << channel; }
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_SetChannelMask (PortMidiStream stream, int mask);
@@ -353,20 +353,20 @@ namespace PortMidiSharp
 		public static extern PmError Pm_Close (PortMidiStream stream);
 
 		// TODO
-		public static long Pm_MessageStatus (long msg) { return ((msg) & 0xFF); }
+		public static int Pm_MessageStatus (int msg) { return ((msg) & 0xFF); }
 		// TODO
-		public static long Pm_MessageData1 (long msg) { return (((msg) >> 8) & 0xFF); }
+		public static int Pm_MessageData1 (int msg) { return (((msg) >> 8) & 0xFF); }
 		// TODO
-		public static long Pm_MessageData2 (long msg) { return (((msg) >> 16) & 0xFF); }
+		public static int Pm_MessageData2 (int msg) { return (((msg) >> 16) & 0xFF); }
 
 		[DllImport ("portmidi")]
-		public static extern int Pm_Read (PortMidiStream stream, MidiEvent [] buffer, long length);
+		public static extern int Pm_Read (PortMidiStream stream, MidiEvent [] buffer, int length);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_Poll (PortMidiStream stream);
 
 		[DllImport ("portmidi")]
-		public static extern PmError Pm_Write (PortMidiStream stream, IntPtr buffer, long length);
+		public static extern PmError Pm_Write (PortMidiStream stream, IntPtr buffer, int length);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_WriteShort (PortMidiStream stream, PmTimestamp when, MidiMessage msg);
