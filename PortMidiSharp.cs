@@ -182,7 +182,10 @@ namespace PortMidiSharp
 
 		public void Write (MidiEvent mevent)
 		{
-			Write (mevent.Timestamp, mevent.Message);
+			if (mevent.SysEx != null)
+				WriteSysEx (mevent.Timestamp, mevent.SysEx);
+			else
+				Write (mevent.Timestamp, mevent.Message);
 		}
 
 		public void Write (PmTimestamp when, MidiMessage msg)
@@ -223,6 +226,8 @@ namespace PortMidiSharp
 	{
 		MidiMessage msg;
 		PmTimestamp ts;
+		[NonSerialized]
+		byte [] sysex;
 
 		public MidiMessage Message {
 			get { return msg; }
@@ -232,6 +237,11 @@ namespace PortMidiSharp
 		public PmTimestamp Timestamp {
 			get { return ts; }
 			set { ts = value; }
+		}
+
+		public byte [] SysEx {
+			get { return sysex; }
+			set { sysex = value; }
 		}
 	}
 
