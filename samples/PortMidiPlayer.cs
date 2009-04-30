@@ -62,24 +62,25 @@ namespace Commons.MidiCompiler
 				int delta = 0;
 //Console.WriteLine ("----");
 				foreach (var mev in track.Events) {
-//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3}]]", mev.DeltaTime, delta, mev.EventCode, mev.Definition.Name);
+//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
 					var msg = new MidiMessage (
 						mev.EventCode,
 						mev.Arguments.Length > 0 ? (int) mev.Arguments [0] : 0,
 						mev.Arguments.Length > 1 ? (int) mev.Arguments [1] : 0);
-					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.GetRawArguments ()});
 					delta += mev.DeltaTime;
+					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.GetRawArguments ()});
 				}
 				var last = new MidiEvent () { Timestamp = delta, Message = new MidiMessage (0, 0, 0) }; // dummy, has Value of 0.
 				l.Add (last);
 			}
 			l.Sort (delegate (MidiEvent e1, MidiEvent e2) { return e1.Timestamp - e2.Timestamp; });
-			for (int i = 0; i < l.Count - 1; i++)
-				if (l [i].Message.Value != 0 || l [i].SysEx != null) {
+			for (int i = 0; i < l.Count - 1; i++) {
+				if (l [i].Message.Value != 0 || l [i].SysEx != null) { // if non-dummy
 					var me = l [i];
 					me.Timestamp = l [i + 1].Timestamp - l [i].Timestamp;
 					l [i] = me;
 				}
+			}
 			events = l;
 		}
 
@@ -147,7 +148,7 @@ namespace Commons.MidiCompiler
 
 		protected virtual void OnMessage (MidiEvent e)
 		{
-if (e.SysEx != null) { Console.Write("{0:X08}:", e.Message.Value); foreach (var b in e.SysEx) Console.Write ("{0:X02} ", b); Console.WriteLine (); }
+//if (e.SysEx != null) { Console.Write("{0:X08}:", e.Message.Value); foreach (var b in e.SysEx) Console.Write ("{0:X02} ", b); Console.WriteLine (); }
 			if ((e.Message.Value & 0xFF) == 0xF0)
 				;//output.WriteSysEx (0, e.SysEx);
 			else if ((e.Message.Value & 0xFF) == 0xF7)
