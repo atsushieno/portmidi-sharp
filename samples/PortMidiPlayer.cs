@@ -15,7 +15,27 @@ namespace Commons.MidiCompiler
 			foreach (var arg in args) {
 				var parser = new SmfParser (File.OpenRead (arg));
 				parser.Parse ();
-				new PortMidiSyncPlayer (output, parser.MusicData).PlayerLoop ();
+#if true
+				var player = new PortMidiSyncPlayer (output, parser.MusicData);
+				player.PlayerLoop ();
+#else
+				var player = new PortMidiPlayer (output, parser.MusicData);
+				player.PlayAsync ();
+				Console.WriteLine ("empty line to quit, P to pause");
+				while (true) {
+					string line = Console.ReadLine ();
+					if (line == "p") {
+						if (player.State == PlayerState.Playing)
+							player.PauseAsync ();
+						else
+							player.PlayAsync ();
+					}
+					else if (line == "") {
+						player.Dispose ();
+						break;
+					}
+				}
+#endif
 			}
 		}
 	}
@@ -74,10 +94,13 @@ namespace Commons.MidiCompiler
 				l.Add (last);
 			}
 			l.Sort (delegate (MidiEvent e1, MidiEvent e2) { return e1.Timestamp - e2.Timestamp; });
+			var waitToNext = 0;
 			for (int i = 0; i < l.Count - 1; i++) {
 				if (l [i].Message.Value != 0 || l [i].SysEx != null) { // if non-dummy
 					var me = l [i];
-					me.Timestamp = l [i + 1].Timestamp - l [i].Timestamp;
+					var tmp = l [i + 1].Timestamp - l [i].Timestamp;
+					me.Timestamp = waitToNext;
+					waitToNext = tmp;// l [i + 1].Timestamp - l [i].Timestamp;
 					l [i] = me;
 				}
 			}
@@ -144,6 +167,7 @@ namespace Commons.MidiCompiler
 				current_tempo = (e.SysEx [1] << 16) + (e.SysEx [2] << 8) + e.SysEx [3];
 
 			OnMessage (e);
+			PlayDeltaTime += e.Timestamp;
 		}
 
 		protected virtual void OnMessage (MidiEvent e)
@@ -153,6 +177,8 @@ namespace Commons.MidiCompiler
 				;//output.WriteSysEx (0, e.SysEx);
 			else if ((e.Message.Value & 0xFF) == 0xF7)
 				;//output.WriteSysEx (0, e.SysEx);
+			else if ((e.Message.Value & 0xFF) == 0xFF)
+				return; // meta. Nothing to send.
 			else
 				output.Write (0, e.Message);
 		}
@@ -175,6 +201,7 @@ namespace Commons.MidiCompiler
 		{
 			player = new PortMidiSyncPlayer (output, music);
 			sync_player_thread = new Thread (new ThreadStart (delegate { player.Play (); }));
+			State = PlayerState.Stopped;
 		}
 
 		public PlayerState State { get; set; }
