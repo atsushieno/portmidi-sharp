@@ -45,28 +45,24 @@ namespace Commons.MidiCompiler
 		}
 	}
 
-	public class SmfEvent
+	public abstract class SmfEvent
 	{
-		public SmfEvent (SmfEventDefinition definition, byte channel, int deltaTime, params byte [] args)
+		SmfEventDefinition definition;
+		int delta_time;
+		byte [] args;
+
+		protected SmfEvent (SmfEventDefinition definition, int deltaTime, params byte [] args)
 		{
 			this.definition = definition;
-			this.channel = channel;
 			this.delta_time = deltaTime;
 			this.args = args;
 		}
-
-		SmfEventDefinition definition;
-		byte channel;
-		int delta_time;
-		byte [] args;
 
 		public SmfEventDefinition Definition {
 			get { return definition; }
 		}
 
-		public byte Channel {
-			get { return channel; }
-		}
+		public abstract byte EventCode { get; }
 
 		public int DeltaTime {
 			get { return delta_time; }
@@ -75,16 +71,97 @@ namespace Commons.MidiCompiler
 		public byte [] Arguments {
 			get { return (byte []) args.Clone (); }
 		}
+
+		public virtual byte [] GetRawArguments ()
+		{
+			return args;
+#if false
+			if (args == null)
+				return null;
+
+			byte [] bytes = new byte [Arguments.Length + 1];
+			Array.Copy (Arguments, 0, bytes, 0, Arguments.Length);
+			bytes [bytes.Length - 1] = 0xF7; // EOX
+			return bytes;
+#endif
+		}
+
+		internal int GetVariableIntegerLength (int value)
+		{
+			int len = 0;
+			for (int x = value; x != 0; x >>= 7)
+				len++;
+			return len;
+		}
+
+		internal void FillVariableInteger (byte [] buf, int index, int value)
+		{
+			int len = 0;
+			for (int x = value; x != 0; x >>= 7)
+				len++;
+			for (int i = index; i < index + len; i++) {
+				int bits = (i * 7);
+				int tmp = value & (0xFF << bits);
+				buf [i] = (byte) ((value & tmp) >> bits);
+				value -= tmp;
+			}
+		}
+	}
+
+	public class SmfChannelEvent : SmfEvent
+	{
+		public SmfChannelEvent (SmfEventDefinition definition, byte channel, int deltaTime, params byte [] args)
+			: base (definition, deltaTime, args)
+		{
+			this.channel = channel;
+		}
+
+		byte channel;
+
+		public byte Channel {
+			get { return channel; }
+		}
+
+		public override byte EventCode {
+			get { return (byte) (Definition.EventType + Channel); }
+		}
+	}
+
+	public class SmfMetaEvent : SmfEvent
+	{
+		byte meta_type;
+
+		public SmfMetaEvent (SmfEventDefinition definition, byte metaType, int deltaTime, params byte [] args)
+			: base (definition, deltaTime, args)
+		{
+			this.meta_type = metaType;
+		}
+
+		public byte MetaType {
+			get { return meta_type; }
+		}
+
+		public override byte EventCode {
+			get { return Definition.EventType; }
+		}
+
+		public override byte [] GetRawArguments ()
+		{
+			byte [] bytes = new byte [Arguments.Length + 1];
+			bytes [0] = MetaType;
+			Array.Copy (Arguments, 0, bytes, 1, Arguments.Length);
+			return bytes;
+		}
 	}
 
 	public class SmfEventDefinition
 	{
 		public static SmfEventDefinition NON = new SmfEventDefinition (
-			"NoteOn", 0x80, true, false,
+			"NoteOff", 0x80, true, false,
 			new SmfEventArgumentDefinition ("key", 1, 0, 0x7F),
 			new SmfEventArgumentDefinition ("vel", 1, 0, 0x7F));
 		public static SmfEventDefinition NOFF = new SmfEventDefinition (
-			"NoteOff", 0x90, true, false,
+			"NoteOn", 0x90, true, false,
 			new SmfEventArgumentDefinition ("key", 1, 0, 0x7F),
 			new SmfEventArgumentDefinition ("vel", 1, 0, 0x7F));
 		public static SmfEventDefinition PAF = new SmfEventDefinition (
@@ -114,6 +191,15 @@ namespace Commons.MidiCompiler
 
 		public static SmfEventDefinition FromType (int type)
 		{
+			switch (type) {
+			case 0xF0:
+				return SmfEventDefinition.EX1;
+			case 0xF7:
+				return SmfEventDefinition.EX2;
+			case 0xFF:
+				return SmfEventDefinition.META;
+			}
+
 			switch (type & 0xF0) {
 			case 0x80:
 				return SmfEventDefinition.NON;
@@ -129,12 +215,6 @@ namespace Commons.MidiCompiler
 				return SmfEventDefinition.CAF;
 			case 0xE0:
 				return SmfEventDefinition.PITCH;
-			case 0xF0:
-				return SmfEventDefinition.EX1;
-			case 0xF7:
-				return SmfEventDefinition.EX2;
-			case 0xFF:
-				return SmfEventDefinition.META;
 			default:
 				throw new FormatException (String.Format ("Unexpected MIDI operation {0:X}", type));
 			}
@@ -365,7 +445,10 @@ namespace Commons.MidiCompiler
 			byte [] args = new byte [len];
 			if (len > 0)
 				ReadBytes (args);
-			return new SmfEvent (def, (byte) (running_status - def.EventType) , deltaTime, args);
+			if (running_status == 0xFF)
+				return new SmfMetaEvent (def, metaType, deltaTime, args);
+			else
+				return new SmfChannelEvent (def, (byte) (running_status - def.EventType) , deltaTime, args);
 		}
 
 		void ReadBytes (byte [] args)
@@ -391,9 +474,10 @@ namespace Commons.MidiCompiler
 			int val = 0;
 			for (int i = 0; i < 4; i++) {
 				byte b = ReadByte ();
-				val = (val << 8) + b;
+				val = (val << 7) + b;
 				if (b < 0x80)
 					return val;
+				val -= 0x80;
 			}
 			throw ParseError ("Delta time specification exceeds the 4-byte limitation.");
 		}

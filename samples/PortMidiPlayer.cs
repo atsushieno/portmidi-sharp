@@ -15,7 +15,7 @@ namespace Commons.MidiCompiler
 			foreach (var arg in args) {
 				var parser = new SmfParser (File.OpenRead (arg));
 				parser.Parse ();
-				new PortMidiPlayer (output, parser.MusicData);
+				new PortMidiSyncPlayer (output, parser.MusicData).PlayerLoop ();
 			}
 		}
 	}
@@ -60,12 +60,14 @@ namespace Commons.MidiCompiler
 			var l = new List<MidiEvent> ();
 			foreach (var track in music.Tracks) {
 				int delta = 0;
+//Console.WriteLine ("----");
 				foreach (var mev in track.Events) {
+//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3}]]", mev.DeltaTime, delta, mev.EventCode, mev.Definition.Name);
 					var msg = new MidiMessage (
-						mev.Definition.EventType,
+						mev.EventCode,
 						mev.Arguments.Length > 0 ? (int) mev.Arguments [0] : 0,
 						mev.Arguments.Length > 1 ? (int) mev.Arguments [1] : 0);
-					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.Definition.UseVariableArguments ? mev.Arguments : null });
+					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.GetRawArguments ()});
 					delta += mev.DeltaTime;
 				}
 				var last = new MidiEvent () { Timestamp = delta, Message = new MidiMessage (0, 0, 0) }; // dummy, has Value of 0.
@@ -73,9 +75,11 @@ namespace Commons.MidiCompiler
 			}
 			l.Sort (delegate (MidiEvent e1, MidiEvent e2) { return e1.Timestamp - e2.Timestamp; });
 			for (int i = 0; i < l.Count - 1; i++)
-				if (l [i].Message.Value != 0 || l [i].SysEx != null)
-					l [i] = new MidiEvent () { Message = l [i].Message, Timestamp = l [i + 1].Timestamp - l [i].Timestamp};
-
+				if (l [i].Message.Value != 0 || l [i].SysEx != null) {
+					var me = l [i];
+					me.Timestamp = l [i + 1].Timestamp - l [i].Timestamp;
+					l [i] = me;
+				}
 			events = l;
 		}
 
@@ -92,6 +96,8 @@ namespace Commons.MidiCompiler
 			pause = true;
 		}
 
+		int event_idx = 0;
+
 		public void PlayerLoop ()
 		{
 			while (true) {
@@ -103,7 +109,51 @@ namespace Commons.MidiCompiler
 					pause = false;
 					continue;
 				}
+				if (event_idx == events.Count)
+					break;
+				HandleEvent (events [event_idx++]);
 			}
+		}
+
+		int current_tempo = 500000; // dummy
+
+		int GetDeltaTimeInMilliseconds (int deltaTime)
+		{
+			if (music.DeltaTimeSpec >= 0x80)
+				throw new NotSupportedException ();
+			return (int) (deltaTime * current_tempo / 1000 / music.DeltaTimeSpec);
+		}
+
+		string ToBinHexString (byte [] bytes)
+		{
+			string s = "";
+			foreach (byte b in bytes)
+				s += String.Format ("{0:X02} ", b);
+			return s;
+		}
+
+		public virtual void HandleEvent (MidiEvent e)
+		{
+			if (e.Timestamp != 0) {
+				var ms = GetDeltaTimeInMilliseconds (e.Timestamp);
+//Console.WriteLine ("{0},{1:X} -> {2}", current_tempo, e.Timestamp, TimeSpan.FromMilliseconds (ms));
+				Thread.Sleep (TimeSpan.FromMilliseconds (ms));
+			}
+			if ((e.Message.Value & 0xFF) == 0xFF && e.SysEx [0] == 0x51)
+				current_tempo = (e.SysEx [1] << 16) + (e.SysEx [2] << 8) + e.SysEx [3];
+
+			OnMessage (e);
+		}
+
+		protected virtual void OnMessage (MidiEvent e)
+		{
+if (e.SysEx != null) { Console.Write("{0:X08}:", e.Message.Value); foreach (var b in e.SysEx) Console.Write ("{0:X02} ", b); Console.WriteLine (); }
+			if ((e.Message.Value & 0xFF) == 0xF0)
+				;//output.WriteSysEx (0, e.SysEx);
+			else if ((e.Message.Value & 0xFF) == 0xF7)
+				;//output.WriteSysEx (0, e.SysEx);
+			else
+				output.Write (0, e.Message);
 		}
 
 		public void Stop ()
