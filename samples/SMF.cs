@@ -421,9 +421,11 @@ namespace Commons.MidiCompiler
 				throw ParseError ("MTrk is expected");
 			int trackSize = ReadInt32 ();
 			current_track_size = 0;
+			int total = 0;
 			while (current_track_size < trackSize) {
 				int delta = ReadVariableLength ();
 				tr.Events.Add (ReadEvent (delta));
+				total += delta;
 			}
 			return tr;
 		}

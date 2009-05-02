@@ -83,6 +83,7 @@ namespace Commons.MidiCompiler
 //Console.WriteLine ("----");
 				foreach (var mev in track.Events) {
 //Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
+if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.EventCode, mev.DeltaTime);
 					var msg = new MidiMessage (
 						mev.EventCode,
 						mev.Arguments.Length > 0 ? (int) mev.Arguments [0] : 0,
@@ -100,7 +101,7 @@ namespace Commons.MidiCompiler
 					var me = l [i];
 					var tmp = l [i + 1].Timestamp - l [i].Timestamp;
 					me.Timestamp = waitToNext;
-					waitToNext = tmp;// l [i + 1].Timestamp - l [i].Timestamp;
+					waitToNext = tmp;
 					l [i] = me;
 				}
 			}
@@ -140,12 +141,13 @@ namespace Commons.MidiCompiler
 		}
 
 		int current_tempo = 500000; // dummy
+		int tempo_ratio = 1;
 
 		int GetDeltaTimeInMilliseconds (int deltaTime)
 		{
 			if (music.DeltaTimeSpec >= 0x80)
 				throw new NotSupportedException ();
-			return (int) (deltaTime * current_tempo / 1000 / music.DeltaTimeSpec);
+			return (int) (current_tempo / 1000 * deltaTime / music.DeltaTimeSpec / tempo_ratio);
 		}
 
 		string ToBinHexString (byte [] bytes)
@@ -160,8 +162,12 @@ namespace Commons.MidiCompiler
 		{
 			if (e.Timestamp != 0) {
 				var ms = GetDeltaTimeInMilliseconds (e.Timestamp);
-//Console.WriteLine ("{0},{1:X} -> {2}", current_tempo, e.Timestamp, TimeSpan.FromMilliseconds (ms));
-				Thread.Sleep (TimeSpan.FromMilliseconds (ms));
+if (e.Message.Value == 0) {
+Console.WriteLine ("!!!!!!!!! empty message at {0} ({1})", PlayDeltaTime, TimeSpan.FromMilliseconds (GetDeltaTimeInMilliseconds (PlayDeltaTime)));
+return; // FIXME: find out why such message is passed.
+}
+//Console.WriteLine ("{0:X},{1:X} -> {2}", e.Message.Value, e.Timestamp, TimeSpan.FromMilliseconds (ms));
+				Thread.Sleep (ms);
 			}
 			if ((e.Message.Value & 0xFF) == 0xFF && e.SysEx [0] == 0x51)
 				current_tempo = (e.SysEx [1] << 16) + (e.SysEx [2] << 8) + e.SysEx [3];

@@ -192,7 +192,7 @@ namespace PortMidiSharp
 		{
 			var ret = PortMidiMarshal.Pm_WriteShort (stream, when, msg);
 			if (ret != PmError.NoError)
-				throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
+				throw new MidiException (ret, String.Format ("Failed to write message {1} (error code {0})", ret, msg.Value));
 		}
 
 		public void WriteSysEx (PmTimestamp when, byte [] sysex)
