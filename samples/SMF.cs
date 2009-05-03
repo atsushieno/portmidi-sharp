@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using Mono;
+using System.Text;
 
 namespace Commons.MidiCompiler
 {
@@ -243,8 +243,6 @@ namespace Commons.MidiCompiler
 			get { return event_type; }
 		}
 
-		public byte MetaType { get; set; } // only for META event.
-
 		public bool ChannelDependent {
 			get { return channel_dependent; }
 		}
@@ -315,7 +313,7 @@ namespace Commons.MidiCompiler
 
 		public void WriteHeader (short format, short tracks, short deltaTimeSpec)
 		{
-			w.Write ("MThd");
+			w.Write (Encoding.ASCII.GetBytes ("MThd"));
 			WriteShort (0);
 			WriteShort (6);
 			WriteShort (format);
@@ -325,13 +323,19 @@ namespace Commons.MidiCompiler
 
 		public void WriteTrack (SmfTrack track)
 		{
-			w.Write ("MTrk");
+			w.Write (Encoding.ASCII.GetBytes ("MTrk"));
 			WriteInt (GetTrackDataSize (track));
 			foreach (SmfEvent e in track.Events) {
 				Write7BitVariableInteger (e.DeltaTime);
 				w.Write (e.Definition.EventType);
-				if (e.Definition.UseVariableArguments) {
+				if (e.Definition == SmfEventDefinition.META) {
+					var me = (SmfMetaEvent) e;
+					w.Write (me.MetaType);
+					Write7BitVariableInteger (e.Arguments.Length);
 					foreach (int i in e.Arguments)
+						w.Write ((byte) i);
+				} else if (e.Definition.UseVariableArguments) {
+					foreach (int i in e.GetRawArguments ())
 						w.Write ((byte) i);
 				} else {
 					for (int i = 0; i < e.Arguments.Length; i++) {
@@ -365,6 +369,11 @@ namespace Commons.MidiCompiler
 
 		void Write7BitVariableInteger (int value)
 		{
+			if (value == 0) {
+				w.Write ((byte) 0);
+				return;
+			}
+
 			int len = 0;
 			for (int x = value; x != 0; x >>= 7)
 				len++;
