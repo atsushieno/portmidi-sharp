@@ -1,18 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
 
-namespace Commons.MidiCompiler
+namespace Commons.Music.Midi
 {
-	// SMF
-
-	public class SmfMusicData
+	public class SmfMusic
 	{
 		List<SmfTrack> tracks = new List<SmfTrack> ();
 
-		public SmfMusicData ()
+		public SmfMusic ()
 		{
 			Format = 1;
 		}
@@ -45,275 +42,125 @@ namespace Commons.MidiCompiler
 		}
 	}
 
-	public abstract class SmfEvent
+	public struct SmfEvent
 	{
-		SmfEventDefinition definition;
-		int delta_time;
-		byte [] args;
-
-		protected SmfEvent (SmfEventDefinition definition, int deltaTime, params byte [] args)
+		public SmfEvent (int deltaTime, SmfMessage msg)
 		{
-			this.definition = definition;
-			this.delta_time = deltaTime;
-			this.args = args;
+			DeltaTime = deltaTime;
+			Message = msg;
 		}
 
-		public SmfEventDefinition Definition {
-			get { return definition; }
-		}
+		public readonly int DeltaTime;
+		public readonly SmfMessage Message;
+	}
 
-		public abstract byte EventCode { get; }
+	public struct SmfMessage
+	{
+		public const byte NoteOff = 0x80;
+		public const byte NoteOn = 0x90;
+		public const byte PAf = 0xA0;
+		public const byte CC = 0xB0;
+		public const byte Program = 0xC0;
+		public const byte CAf = 0xD0;
+		public const byte Pitch = 0xE0;
+		public const byte SysEx1 = 0xF0;
+		public const byte SysEx2 = 0xF7;
+		public const byte Meta = 0xFF;
 
-		public int DeltaTime {
-			get { return delta_time; }
-		}
+		public const byte EndSysEx = 0xF7;
 
-		public byte [] Arguments {
-			get { return (byte []) args.Clone (); }
-		}
-
-		public virtual byte [] GetRawArguments ()
+		public SmfMessage (int value)
 		{
-			return args;
-#if false
-			if (args == null)
-				return null;
-
-			byte [] bytes = new byte [Arguments.Length + 1];
-			Array.Copy (Arguments, 0, bytes, 0, Arguments.Length);
-			bytes [bytes.Length - 1] = 0xF7; // EOX
-			return bytes;
-#endif
+			Value = value;
+			Data = null;
 		}
 
-		internal int GetVariableIntegerLength (int value)
+		public SmfMessage (byte type, byte arg1, byte arg2, byte [] data)
 		{
-			int len = 0;
-			for (int x = value; x != 0; x >>= 7)
-				len++;
-			return len;
+			Value = type + (arg1 << 8) + (arg2 << 16);
+			Data = data;
 		}
 
-		internal void FillVariableInteger (byte [] buf, int index, int value)
-		{
-			int len = 0;
-			for (int x = value; x != 0; x >>= 7)
-				len++;
-			for (int i = index; i < index + len; i++) {
-				int bits = (i * 7);
-				int tmp = value & (0xFF << bits);
-				buf [i] = (byte) ((value & tmp) >> bits);
-				value -= tmp;
+		public readonly int Value;
+
+		// This expects EndSysEx byte _inclusive_ for F0 message.
+		public readonly byte [] Data;
+
+		public byte StatusByte {
+			get { return (byte) (Value & 0xFF); }
+		}
+
+		public byte MessageType {
+			get {
+				switch (StatusByte) {
+				case Meta:
+				case SysEx1:
+				case SysEx2:
+					return StatusByte;
+				default:
+					return (byte) (Value & 0xF0);
+				}
 			}
 		}
-	}
 
-	public class SmfChannelEvent : SmfEvent
-	{
-		public SmfChannelEvent (SmfEventDefinition definition, byte channel, int deltaTime, params byte [] args)
-			: base (definition, deltaTime, args)
-		{
-			this.channel = channel;
+		public byte Msb {
+			get { return (byte) ((Value & 0xFF00) >> 8); }
 		}
 
-		byte channel;
-
-		public byte Channel {
-			get { return channel; }
-		}
-
-		public override byte EventCode {
-			get { return (byte) (Definition.EventType + Channel); }
-		}
-	}
-
-	public class SmfMetaEvent : SmfEvent
-	{
-		byte meta_type;
-
-		public SmfMetaEvent (SmfEventDefinition definition, byte metaType, int deltaTime, params byte [] args)
-			: base (definition, deltaTime, args)
-		{
-			this.meta_type = metaType;
+		public byte Lsb {
+			get { return (byte) ((Value & 0xFF0000) >> 16); }
 		}
 
 		public byte MetaType {
-			get { return meta_type; }
+			get { return Msb; }
 		}
 
-		public override byte EventCode {
-			get { return Definition.EventType; }
+		public byte Channel {
+			get { return (byte) (Value & 0x0F); }
 		}
 
-		public override byte [] GetRawArguments ()
+		public static byte FixedDataSize (byte statusByte)
 		{
-			byte [] bytes = new byte [Arguments.Length + 1];
-			bytes [0] = MetaType;
-			Array.Copy (Arguments, 0, bytes, 1, Arguments.Length);
-			return bytes;
-		}
-	}
-
-	public class SmfEventDefinition
-	{
-		public static SmfEventDefinition NON = new SmfEventDefinition (
-			"NoteOff", 0x80, true, false,
-			new SmfEventArgumentDefinition ("key", 1, 0, 0x7F),
-			new SmfEventArgumentDefinition ("vel", 1, 0, 0x7F));
-		public static SmfEventDefinition NOFF = new SmfEventDefinition (
-			"NoteOn", 0x90, true, false,
-			new SmfEventArgumentDefinition ("key", 1, 0, 0x7F),
-			new SmfEventArgumentDefinition ("vel", 1, 0, 0x7F));
-		public static SmfEventDefinition PAF = new SmfEventDefinition (
-			"PolyphonicAfterTouch", 0xA0, true, false,
-			new SmfEventArgumentDefinition ("key", 1, 0, 0x7F),
-			new SmfEventArgumentDefinition ("pressure", 1, 0, 0x7F));
-		public static SmfEventDefinition CC = new SmfEventDefinition (
-			"CommonControl", 0xB0, true, false,
-			new SmfEventArgumentDefinition ("control", 1, 0, 0x7F),
-			new SmfEventArgumentDefinition ("data", 1, 0, 0x7F));
-		public static SmfEventDefinition PRG = new SmfEventDefinition (
-			"ProgramChange", 0xC0, true, false,
-			new SmfEventArgumentDefinition ("program", 1, 0, 0x7F));
-		public static SmfEventDefinition CAF = new SmfEventDefinition (
-			"ChannelAfterTouch", 0xD0, true, false,
-			new SmfEventArgumentDefinition ("pressure", 1, 0, 0x7F));
-		public static SmfEventDefinition PITCH = new SmfEventDefinition (
-			"PitchBend", 0xE0, true, false,
-			new SmfEventArgumentDefinition ("dataSmaller", 1, 0, 0x7F),
-			new SmfEventArgumentDefinition ("dataLarger", 1, 0, 0x7F));
-		public static SmfEventDefinition EX1 = new SmfEventDefinition (
-			"Exclusive", 0xF0, false, true);
-		public static SmfEventDefinition EX2 = new SmfEventDefinition (
-			"Exclusive", 0xF7, false, true);
-		public static SmfEventDefinition META = new SmfEventDefinition (
-			"Meta", 0xFF, false, true);
-
-		public static SmfEventDefinition FromType (int type)
-		{
-			switch (type) {
-			case 0xF0:
-				return SmfEventDefinition.EX1;
-			case 0xF7:
-				return SmfEventDefinition.EX2;
-			case 0xFF:
-				return SmfEventDefinition.META;
-			}
-
-			switch (type & 0xF0) {
-			case 0x80:
-				return SmfEventDefinition.NON;
-			case 0x90:
-				return SmfEventDefinition.NOFF;
-			case 0xA0:
-				return SmfEventDefinition.PAF;
-			case 0xB0:
-				return SmfEventDefinition.CC;
-			case 0xC0:
-				return SmfEventDefinition.PRG;
-			case 0xD0:
-				return SmfEventDefinition.CAF;
-			case 0xE0:
-				return SmfEventDefinition.PITCH;
+			switch (statusByte & 0xF0) {
+			case 0xF0: // and 0xF7, 0xFF
+				return 0; // no fixed data
+			case Program: // ProgramChg
+			case CAf: // CAf
+				return 1;
 			default:
-				throw new FormatException (String.Format ("Unexpected MIDI operation {0:X}", type));
+				return 2;
 			}
 		}
-
-		public SmfEventDefinition (string name, byte eventType, bool channelDependent, bool useVariableArguments, params SmfEventArgumentDefinition [] args)
-		{
-			this.name = name;
-			event_type = eventType;
-			channel_dependent = channelDependent;
-			this.varargs = useVariableArguments;
-			this.args = new Collection<SmfEventArgumentDefinition> (args);
-		}
-
-		string name;
-		byte event_type;
-		bool channel_dependent;
-		bool varargs;
-		Collection<SmfEventArgumentDefinition> args;
-
-		public string Name {
-			get { return name; }
-		}
-
-		public byte EventType {
-			get { return event_type; }
-		}
-
-		public bool ChannelDependent {
-			get { return channel_dependent; }
-		}
-
-		public bool UseVariableArguments {
-			get { return varargs; }
-		}
-
-		public IList<SmfEventArgumentDefinition> Arguments {
-			get { return args; }
-		}
 	}
 
-	public class SmfEventArgumentDefinition
+	public class SmfWriter
 	{
-		public SmfEventArgumentDefinition (string name, int size, int min, int max)
-		{
-			this.name = name;
-			this.size = size;
-			this.min = min;
-			this.max = max;
-		}
+		Stream stream;
 
-		string name;
-		int size, min, max;
-
-		public string Name {
-			get { return name; }
-		}
-
-		public int Size {
-			get { return size; }
-		}
-
-		public int MinValue {
-			get { return min; }
-		}
-
-		public int MaxValue {
-			get { return max; }
-		}
-	}
-
-	public class SmfGenerator
-	{
-		BinaryWriter w;
-
-		public SmfGenerator (Stream stream)
+		public SmfWriter (Stream stream)
 		{
 			if (stream == null)
 				throw new ArgumentNullException ("stream");
-			this.w = new BinaryWriter (stream);
+			this.stream = stream;
 		}
 
 		void WriteShort (short v)
 		{
-			w.Write ((byte) (v / 0x100));
-			w.Write ((byte) (v % 0x100));
+			stream.WriteByte ((byte) (v / 0x100));
+			stream.WriteByte ((byte) (v % 0x100));
 		}
 
 		void WriteInt (int v)
 		{
-			w.Write ((byte) (v / 0x1000000));
-			w.Write ((byte) (v / 0x10000 & 0xFF));
-			w.Write ((byte) (v / 0x100 & 0xFF));
-			w.Write ((byte) (v % 0x100));
+			stream.WriteByte ((byte) (v / 0x1000000));
+			stream.WriteByte ((byte) (v / 0x10000 & 0xFF));
+			stream.WriteByte ((byte) (v / 0x100 & 0xFF));
+			stream.WriteByte ((byte) (v % 0x100));
 		}
 
 		public void WriteHeader (short format, short tracks, short deltaTimeSpec)
 		{
-			w.Write (Encoding.ASCII.GetBytes ("MThd"));
+			stream.Write (Encoding.ASCII.GetBytes ("MThd"), 0, 4);
 			WriteShort (0);
 			WriteShort (6);
 			WriteShort (format);
@@ -323,80 +170,108 @@ namespace Commons.MidiCompiler
 
 		public void WriteTrack (SmfTrack track)
 		{
-			w.Write (Encoding.ASCII.GetBytes ("MTrk"));
+			stream.Write (Encoding.ASCII.GetBytes ("MTrk"), 0, 4);
 			WriteInt (GetTrackDataSize (track));
+
+			byte running_status = 0;
+
 			foreach (SmfEvent e in track.Events) {
 				Write7BitVariableInteger (e.DeltaTime);
-				w.Write (e.Definition.EventType);
-				if (e.Definition == SmfEventDefinition.META) {
-					var me = (SmfMetaEvent) e;
-					w.Write (me.MetaType);
-					Write7BitVariableInteger (e.Arguments.Length);
-					foreach (int i in e.Arguments)
-						w.Write ((byte) i);
-				} else if (e.Definition.UseVariableArguments) {
-					foreach (int i in e.GetRawArguments ())
-						w.Write ((byte) i);
-				} else {
-					for (int i = 0; i < e.Arguments.Length; i++) {
-						int size = e.Definition.Arguments [i].Size;
-						if (size == 1)
-							w.Write ((byte) e.Arguments [i]);
-						else if (size == 2)
-							Write7BitVariableInteger (e.Arguments [i]);
-						else
-							throw new NotImplementedException ();
-					}
+				if (running_status >= 0xF0 || e.Message.StatusByte != running_status)
+					stream.WriteByte (e.Message.StatusByte);
+				running_status = e.Message.StatusByte;
+				switch (e.Message.MessageType) {
+				case SmfMessage.Meta:
+					stream.WriteByte (e.Message.MetaType);
+					Write7BitVariableInteger (e.Message.Data.Length);
+					stream.Write (e.Message.Data, 0, e.Message.Data.Length);
+					break;
+				case SmfMessage.SysEx1:
+				case SmfMessage.SysEx2:
+					Write7BitVariableInteger (e.Message.Data.Length);
+					stream.Write (e.Message.Data, 0, e.Message.Data.Length);
+					break;
+				default:
+					int len = SmfMessage.FixedDataSize (e.Message.MessageType);
+					stream.WriteByte (e.Message.Msb);
+					if (len > 1)
+						stream.WriteByte (e.Message.Lsb);
+					if (len > 2)
+						throw new Exception ("Unexpected data size: " + len);
+					break;
 				}
 			}
+		}
+
+		int GetVariantLength (int value)
+		{
+			if (value == 0)
+				return 1;
+			int ret = 0;
+			for (int x = value; x != 0; x >>= 7)
+				ret++;
+			return ret;
 		}
 
 		int GetTrackDataSize (SmfTrack track)
 		{
 			int size = 0;
+			byte running_status = 0;
 			foreach (SmfEvent e in track.Events) {
-				for (int x = e.DeltaTime; x != 0; x >>= 7)
+				// delta time
+				size += GetVariantLength (e.DeltaTime);
+
+				// message type & channel
+				if (running_status >= 0xF0 || running_status != e.Message.StatusByte)
 					size++;
-				size++;
-				if (e.Definition.UseVariableArguments)
-					size += e.Arguments.Length;
-				else
-					foreach (SmfEventArgumentDefinition a in e.Definition.Arguments)
-						size += a.Size;
+				running_status = e.Message.StatusByte;
+
+				// arguments
+				switch (e.Message.MessageType) {
+				case SmfMessage.Meta:
+					size++; // MetaType
+					goto case SmfMessage.SysEx1;
+				case SmfMessage.SysEx1:
+				case SmfMessage.SysEx2:
+					size += GetVariantLength (e.Message.Data.Length);
+					size += e.Message.Data.Length;
+					break;
+				default:
+					size += SmfMessage.FixedDataSize (e.Message.MessageType);
+					break;
+				}
 			}
 			return size;
 		}
 
 		void Write7BitVariableInteger (int value)
 		{
+			Write7BitVariableInteger (value, false);
+		}
+
+		void Write7BitVariableInteger (int value, bool shifted)
+		{
 			if (value == 0) {
-				w.Write ((byte) 0);
+				stream.WriteByte ((byte) (shifted ? 0x80 : 0));
 				return;
 			}
-
-			int len = 0;
-			for (int x = value; x != 0; x >>= 7)
-				len++;
-			for (int i = 0; i < len; i++) {
-				int bits = (i * 7);
-				int tmp = value & (0xFF << bits);
-				w.Write ((byte) ((value & tmp) >> bits));
-				value -= tmp;
-			}
+			if (value > 0x80)
+				Write7BitVariableInteger (value >> 7, true);
+			stream.WriteByte ((byte) ((value & 0x7F) + (shifted ? 0x80 : 0)));
 		}
 	}
 
-	public class SmfParser
+	public class SmfReader
 	{
-		public SmfParser (Stream stream)
+		public SmfReader (Stream stream)
 		{
 			this.stream = stream;
 		}
 
 		Stream stream;
-		SmfMusicData data = new SmfMusicData ();
+		SmfMusic data = new SmfMusic ();
 
-		public SmfMusicData MusicData { get { return data; } }
+		public SmfMusic Music { get { return data; } }
 
 		public void Parse ()
 		{
@@ -436,6 +311,8 @@ namespace Commons.MidiCompiler
 				tr.Events.Add (ReadEvent (delta));
 				total += delta;
 			}
+			if (current_track_size != trackSize)
+				throw ParseError ("Size information mismatch");
 			return tr;
 		}
 
@@ -446,20 +323,24 @@ namespace Commons.MidiCompiler
 		{
 			byte b = PeekByte ();
 			running_status = b < 0x80 ? running_status : ReadByte ();
-			var def = SmfEventDefinition.FromType (running_status);
-			byte metaType = running_status == 0xFF ? ReadByte () : (byte) 0;
 			int len;
-			if (def.UseVariableArguments)
+			switch (running_status) {
+			case SmfMessage.SysEx1:
+			case SmfMessage.SysEx2:
+			case SmfMessage.Meta:
+				byte metaType = running_status == SmfMessage.Meta ? ReadByte () : (byte) 0;
 				len = ReadVariableLength ();
-			else
-				len = def.Arguments.Count;
-			byte [] args = new byte [len];
-			if (len > 0)
-				ReadBytes (args);
-			if (running_status == 0xFF)
-				return new SmfMetaEvent (def, metaType, deltaTime, args);
-			else
-				return new SmfChannelEvent (def, (byte) (running_status - def.EventType) , deltaTime, args);
+				byte [] args = new byte [len];
+				if (len > 0)
+					ReadBytes (args);
+				return new SmfEvent (deltaTime, new SmfMessage (running_status, metaType, 0, args));
+			default:
+				int value = running_status;
+				value += ReadByte () << 8;
+				if (SmfMessage.FixedDataSize (running_status) == 2)
+					value += ReadByte () << 16;
+				return new SmfEvent (deltaTime, new SmfMessage (value));
+			}
 		}
 
 		void ReadBytes (byte [] args)
@@ -533,19 +414,6 @@ namespace Commons.MidiCompiler
 		int ReadInt32 ()
 		{
 			return (((ReadByte () << 8) + ReadByte () << 8) + ReadByte () << 8) + ReadByte ();
-		}
-
-		struct SmfDeltaTime
-		{
-			int size, delta;
-			public SmfDeltaTime (int size, int deltaTime)
-			{
-				this.size = size;
-				this.delta = deltaTime;
-			}
-
-			public int Size { get { return size; } }
-			public int DeltaTime  { get { return delta; } }
 		}
 
 		Exception ParseError (string msg)

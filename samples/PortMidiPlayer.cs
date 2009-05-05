@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using PortMidiSharp;
 
-namespace Commons.MidiCompiler
+namespace Commons.Music.Midi
 {
 	public class Driver
 	{
@@ -13,10 +13,19 @@ namespace Commons.MidiCompiler
 		{
 			var output = MidiDeviceManager.OpenOutput (MidiDeviceManager.DefaultOutputDeviceID);
 			foreach (var arg in args) {
-				var parser = new SmfParser (File.OpenRead (arg));
+				var parser = new SmfReader (File.OpenRead (arg));
 				parser.Parse ();
 #if true
-				var player = new PortMidiSyncPlayer (output, parser.MusicData);
+/* // test reader/writer sanity
+				using (var outfile = File.OpenWrite ("testtest.mid")) {
+					var data = parser.Music;
+					var gen = new SmfWriter (outfile);
+					gen.WriteHeader (data.Format, (short)data.Tracks.Count, data.DeltaTimeSpec);
+					foreach (var tr in data.Tracks)
+						gen.WriteTrack (tr);
+				}
+*/
+				var player = new PortMidiSyncPlayer (output, parser.Music);
 				player.PlayerLoop ();
 #else
 				var player = new PortMidiPlayer (output, parser.MusicData);
@@ -50,7 +59,7 @@ namespace Commons.MidiCompiler
 	// Player implementation. Plays a MIDI song synchronously.
 	public class PortMidiSyncPlayer : IDisposable
 	{
-		public PortMidiSyncPlayer (MidiOutput output, SmfMusicData music)
+		public PortMidiSyncPlayer (MidiOutput output, SmfMusic music)
 		{
 			if (output == null)
 				throw new ArgumentNullException ("output");
@@ -63,7 +72,7 @@ namespace Commons.MidiCompiler
 		}
 
 		MidiOutput output;
-		SmfMusicData music;
+		SmfMusic music;
 		List<MidiEvent> events;
 		ManualResetEvent pause_handle = new ManualResetEvent (true);
 		bool pause, stop;
@@ -75,7 +84,7 @@ namespace Commons.MidiCompiler
 			output.Close ();
 		}
 
-		void BuildSmfEvents (SmfMusicData music)
+		void BuildSmfEvents (SmfMusic music)
 		{
 			var l = new List<MidiEvent> ();
 			foreach (var track in music.Tracks) {
@@ -83,13 +92,13 @@ namespace Commons.MidiCompiler
 //Console.WriteLine ("----");
 				foreach (var mev in track.Events) {
 //Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
-if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.EventCode, mev.DeltaTime);
+if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.MessageType, mev.DeltaTime);
 					var msg = new MidiMessage (
-						mev.EventCode,
-						mev.Arguments.Length > 0 ? (int) mev.Arguments [0] : 0,
-						mev.Arguments.Length > 1 ? (int) mev.Arguments [1] : 0);
+						mev.Message.Value & 0xFF,
+						(mev.Message.Value & 0xFF00) >> 8,
+						(mev.Message.Value & 0xFF0000) >> 16);
 					delta += mev.DeltaTime;
-					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.GetRawArguments ()});
+					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.Message.Data});
 				}
 				var last = new MidiEvent () { Timestamp = delta, Message = new MidiMessage (0, 0, 0) }; // dummy, has Value of 0.
 				l.Add (last);
@@ -169,8 +178,8 @@ return; // FIXME: find out why such message is passed.
 //Console.WriteLine ("{0:X},{1:X} -> {2}", e.Message.Value, e.Timestamp, TimeSpan.FromMilliseconds (ms));
 				Thread.Sleep (ms);
 			}
-			if ((e.Message.Value & 0xFF) == 0xFF && e.SysEx [0] == 0x51)
-				current_tempo = (e.SysEx [1] << 16) + (e.SysEx [2] << 8) + e.SysEx [3];
+			if ((e.Message.Value & 0xFF) == 0xFF && (e.Message.Value & 0xFF00) == 0x5100)
+				current_tempo = (e.SysEx [0] << 16) + (e.SysEx [1] << 8) + e.SysEx [2];
 
 			OnMessage (e);
 			PlayDeltaTime += e.Timestamp;
@@ -178,7 +187,6 @@ return; // FIXME: find out why such message is passed.
 
 		protected virtual void OnMessage (MidiEvent e)
 		{
-//if (e.SysEx != null) { Console.Write("{0:X08}:", e.Message.Value); foreach (var b in e.SysEx) Console.Write ("{0:X02} ", b); Console.WriteLine (); }
 			if ((e.Message.Value & 0xFF) == 0xF0)
 				;//output.WriteSysEx (0, e.SysEx);
 			else if ((e.Message.Value & 0xFF) == 0xF7)
@@ -203,7 +211,7 @@ return; // FIXME: find out why such message is passed.
 		PortMidiSyncPlayer player;
 		Thread sync_player_thread;
 
-		public PortMidiPlayer (MidiOutput output, SmfMusicData music)
+		public PortMidiPlayer (MidiOutput output, SmfMusic music)
 		{
 			player = new PortMidiSyncPlayer (output, music);
 			sync_player_thread = new Thread (new ThreadStart (delegate { player.Play (); }));
