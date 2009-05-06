@@ -68,12 +68,12 @@ namespace Commons.Music.Midi
 
 			this.output = output;
 			this.music = music;
-			BuildSmfEvents (music);
+			events = SmfEventMerger.Merge (music);
 		}
 
 		MidiOutput output;
 		SmfMusic music;
-		List<MidiEvent> events;
+		IList<SmfEvent> events;
 		ManualResetEvent pause_handle = new ManualResetEvent (true);
 		bool pause, stop;
 
@@ -82,39 +82,6 @@ namespace Commons.Music.Midi
 		public void Dispose ()
 		{
 			output.Close ();
-		}
-
-		void BuildSmfEvents (SmfMusic music)
-		{
-			var l = new List<MidiEvent> ();
-			foreach (var track in music.Tracks) {
-				int delta = 0;
-//Console.WriteLine ("----");
-				foreach (var mev in track.Events) {
-//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
-if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.MessageType, mev.DeltaTime);
-					var msg = new MidiMessage (
-						mev.Message.Value & 0xFF,
-						(mev.Message.Value & 0xFF00) >> 8,
-						(mev.Message.Value & 0xFF0000) >> 16);
-					delta += mev.DeltaTime;
-					l.Add (new MidiEvent () { Timestamp = delta, Message = msg, SysEx = mev.Message.Data});
-				}
-				var last = new MidiEvent () { Timestamp = delta, Message = new MidiMessage (0, 0, 0) }; // dummy, has Value of 0.
-				l.Add (last);
-			}
-			l.Sort (delegate (MidiEvent e1, MidiEvent e2) { return e1.Timestamp - e2.Timestamp; });
-			var waitToNext = 0;
-			for (int i = 0; i < l.Count - 1; i++) {
-				if (l [i].Message.Value != 0 || l [i].SysEx != null) { // if non-dummy
-					var me = l [i];
-					var tmp = l [i + 1].Timestamp - l [i].Timestamp;
-					me.Timestamp = waitToNext;
-					waitToNext = tmp;
-					l [i] = me;
-				}
-			}
-			events = l;
 		}
 
 		public void Play ()
@@ -167,25 +134,25 @@ if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.Messa
 			return s;
 		}
 
-		public virtual void HandleEvent (MidiEvent e)
+		public virtual void HandleEvent (SmfEvent e)
 		{
-			if (e.Timestamp != 0) {
-				var ms = GetDeltaTimeInMilliseconds (e.Timestamp);
+			if (e.DeltaTime != 0) {
+				var ms = GetDeltaTimeInMilliseconds (e.DeltaTime);
 if (e.Message.Value == 0) {
 Console.WriteLine ("!!!!!!!!! empty message at {0} ({1})", PlayDeltaTime, TimeSpan.FromMilliseconds (GetDeltaTimeInMilliseconds (PlayDeltaTime)));
 return; // FIXME: find out why such message is passed.
 }
-//Console.WriteLine ("{0:X},{1:X} -> {2}", e.Message.Value, e.Timestamp, TimeSpan.FromMilliseconds (ms));
+//Console.WriteLine ("{0:X},{1:X} -> {2}", e.Message.Value, e.DeltaTime, TimeSpan.FromMilliseconds (ms));
 				Thread.Sleep (ms);
 			}
 			if ((e.Message.Value & 0xFF) == 0xFF && (e.Message.Value & 0xFF00) == 0x5100)
-				current_tempo = (e.SysEx [0] << 16) + (e.SysEx [1] << 8) + e.SysEx [2];
+				current_tempo = (e.Message.Data [0] << 16) + (e.Message.Data [1] << 8) + e.Message.Data [2];
 
 			OnMessage (e);
-			PlayDeltaTime += e.Timestamp;
+			PlayDeltaTime += e.DeltaTime;
 		}
 
-		protected virtual void OnMessage (MidiEvent e)
+		protected virtual void OnMessage (SmfEvent e)
 		{
 			if ((e.Message.Value & 0xFF) == 0xF0)
 				;//output.WriteSysEx (0, e.SysEx);
@@ -194,7 +161,7 @@ return; // FIXME: find out why such message is passed.
 			else if ((e.Message.Value & 0xFF) == 0xFF)
 				return; // meta. Nothing to send.
 			else
-				output.Write (0, e.Message);
+				output.Write (0, new MidiMessage (e.Message.Value));
 		}
 
 		public void Stop ()

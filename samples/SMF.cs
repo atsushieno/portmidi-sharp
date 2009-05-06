@@ -427,6 +427,54 @@ namespace Commons.Music.Midi
 		}
 	}
 
+	public class SmfEventMerger
+	{
+		public static IList<SmfEvent> Merge (SmfMusic source)
+		{
+			return new SmfEventMerger (source).GetMergedEvents ();
+		}
+
+		SmfEventMerger (SmfMusic source)
+		{
+			this.source = source;
+		}
+
+		SmfMusic source;
+
+		IList<SmfEvent> GetMergedEvents ()
+		{
+			var l = new List<SmfEvent> ();
+
+			foreach (var track in source.Tracks) {
+				int delta = 0;
+//Console.WriteLine ("----");
+				foreach (var mev in track.Events) {
+//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
+if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.MessageType, mev.DeltaTime);
+					delta += mev.DeltaTime;
+					l.Add (new SmfEvent (delta, mev.Message));
+				}
+				var last = new SmfEvent (delta, new SmfMessage (0)); // dummy, has Value of 0.
+				l.Add (last);
+			}
+
+			if (l.Count == 0)
+				return l; // empty (why did you need to sort your song file?)
+
+			l.Sort (delegate (SmfEvent e1, SmfEvent e2) { return e1.DeltaTime - e2.DeltaTime; });
+			var waitToNext = l [0].DeltaTime;
+			for (int i = 0; i < l.Count - 1; i++) {
+				if (l [i].Message.Value != 0) { // if non-dummy
+					var tmp = l [i + 1].DeltaTime - l [i].DeltaTime;
+					l [i] = new SmfEvent (waitToNext, l [i].Message);
+					waitToNext = tmp;
+				}
+			}
+
+			return l;
+		}
+	}
+
 	public class SmfParserException : Exception
 	{
 		public SmfParserException () : this ("SMF parser error") {}
