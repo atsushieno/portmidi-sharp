@@ -1,0 +1,10 @@
+The patches are to autotoolize portmidi so that hopefully we can build
+portmidi as dynamic library in all platforms (like mono does).
+
+Extract appropriate archive under portmidi/trunk directory in your copy
+of portmedia svn repository.
+
+Though I haven't improved them to build all tests, and cygwin build script
+is still not complete. So it is unofficial (not even posted to portmedia
+community) yet.
+
