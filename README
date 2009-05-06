@@ -5,13 +5,9 @@ solution, but it looks bogus since it seems trying to use C++/CLI
 mixed solution which is no-go for Mono.
 
 
-You need shared library version of portmidi, which I also posted
-to portmidi mailing list:
-http://www.mail-archive.com/media_api@create.ucsb.edu/msg00259.html
-
-It might be better to have this integrated into portmidi itself
-but so far I haven't dug in depth to get it into there yet. Feel
-free to do it if you are interested and you can :)
+You need shared library version of portmidi, which can be built
+with some help of my patches. See portmidi-patches directory as
+well as README in the patch directory.
 
 Atsushi Eno
 
