@@ -47,7 +47,7 @@ namespace PortMidiSharp
 
 		public static MidiDeviceInfo GetDeviceInfo (PmDeviceID id)
 		{
-			return new MidiDeviceInfo (PortMidiMarshal.Pm_GetDeviceInfo (id));
+			return new MidiDeviceInfo (id, PortMidiMarshal.Pm_GetDeviceInfo (id));
 		}
 
 		public static MidiOutput OpenOutput (PmDeviceID outputDevice)
@@ -100,10 +100,13 @@ namespace PortMidiSharp
 	{
 		PmDeviceInfo info;
 
-		internal MidiDeviceInfo (IntPtr ptr)
+		internal MidiDeviceInfo (int id, IntPtr ptr)
 		{
+			ID = id;
 			this.info = (PmDeviceInfo) Marshal.PtrToStructure (ptr, typeof (PmDeviceInfo));
 		}
+
+		public int ID { get; set; }
 
 		public string Interface {
 			get { return Marshal.PtrToStringAnsi (info.Interface); }
