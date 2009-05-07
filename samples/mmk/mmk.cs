@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Drawing;
 using System.Windows.Forms;
@@ -9,6 +10,17 @@ namespace Commons.Music.Midi
 {
 	public class Mmk : Form
 	{
+		static readonly List<string> tone_list;
+
+		static Mmk ()
+		{
+			tone_list = new List<string> ();
+			int n = 0;
+			var chars = "\n".ToCharArray ();
+			foreach (string s in new StreamReader (typeof (Mmk).Assembly.GetManifestResourceStream ("tonelist.txt")).ReadToEnd ().Split (chars, StringSplitOptions.RemoveEmptyEntries))
+				tone_list.Add (n++ + ":" + s);
+		}
+
 		public static void Main ()
 		{
 			Application.Run (new Mmk ());
@@ -19,7 +31,7 @@ namespace Commons.Music.Midi
 			SetupMidiDevices ();
 
 			this.Width = 400;
-			this.Height = 250;
+			this.Height = 300;
 
 			SetupMenus ();
 
@@ -27,7 +39,7 @@ namespace Commons.Music.Midi
 			Controls.Add (statusBar);
 
 			SetupDeviceSelector ();
-
+			SetupToneSelector ();
 			SetupKeyboardLayout (KeyMap.JP106); // FIXME: make it customizible
 		}
 
@@ -63,6 +75,7 @@ namespace Commons.Music.Midi
 		void SetupDeviceSelector ()
 		{
 			ComboBox cb = new ComboBox ();
+			cb.TabIndex = 2;
 			cb.Location = new Point (10, 10);
 			cb.Width = 200;
 			cb.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -90,12 +103,28 @@ namespace Commons.Music.Midi
 				output = null;
 			}
 			output = MidiDeviceManager.OpenOutput (output_devices [deviceIndex].ID);
-			output.Write (0, new MidiMessage (0xB0, 0, 0));
+			output.Write (0, new MidiMessage (0xC0, 0, 0));
+		}
+
+		void SetupToneSelector ()
+		{
+			ComboBox cb = new ComboBox ();
+			cb.TabIndex = 3;
+			cb.Location = new Point (10, 40);
+			cb.Width = 200;
+			cb.DropDownStyle = ComboBoxStyle.DropDownList;
+			cb.DataSource = tone_list;
+			cb.SelectedIndexChanged += delegate {
+				output.Write (0, new MidiMessage (0xC0, cb.SelectedIndex, 0));
+			};
+			Controls.Add (cb);
 		}
 
 		void SetupKeyboardLayout (KeyMap map)
 		{
 			keymap = map;
+
+			int top = 70;
 
 			// offset 4, 10, 18 are not mapped, so skip those numbers
 			var hl = new List<Button> ();
@@ -104,7 +133,7 @@ namespace Commons.Music.Midi
 					continue;
 				j++;
 				var b = new NoteButton ();
-				b.Location = new Point (btSize / 2 + i * btSize / 2, i % 2 == 0 ? 50 : 55 + btSize);
+				b.Location = new Point (btSize / 2 + i * btSize / 2, i % 2 == 0 ? top : top + 5 + btSize);
 				hl.Add (b);
 				Controls.Add (b);
 			}
@@ -115,7 +144,7 @@ namespace Commons.Music.Midi
 					continue;
 				j++;
 				var b = new NoteButton ();
-				b.Location = new Point (btSize + i * btSize / 2, i % 2 == 0 ? 60 + btSize * 2 : 65 + btSize * 3);
+				b.Location = new Point (btSize + i * btSize / 2, i % 2 == 0 ? top + 10 + btSize * 2 : top + 15 + btSize * 3);
 				ll.Add (b);
 				Controls.Add (b);
 			}
@@ -124,10 +153,15 @@ namespace Commons.Music.Midi
 			high_button_states = new bool [high_buttons.Length];
 			low_button_states = new bool [low_buttons.Length];
 
-			KeyDown += delegate (object o, KeyEventArgs e) {
+			var tb = new TextBox ();
+			tb.TabIndex = 0;
+			tb.Location = new Point (10, 170);
+			tb.TextChanged += delegate { tb.Text = String.Empty; };
+			Controls.Add (tb);
+			tb.KeyDown += delegate (object o, KeyEventArgs e) {
 				ProcessKey (true, e);
 			};
-			KeyUp += delegate (object o, KeyEventArgs e) {
+			tb.KeyUp += delegate (object o, KeyEventArgs e) {
 				ProcessKey (false, e);
 			};
 		}
@@ -144,6 +178,7 @@ namespace Commons.Music.Midi
 			{
 				Width = Mmk.btSize;
 				Height = Mmk.btSize;
+				Enabled = false;
 			}
 
 			protected override void OnGotFocus (EventArgs e)
