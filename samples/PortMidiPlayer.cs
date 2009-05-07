@@ -26,16 +26,18 @@ namespace Commons.Music.Midi
 				}
 */
 // test merger/splitter
+/*
 				var merged = SmfTrackMerger.Merge (parser.Music);
 //				var result = merged;
 				var result = SmfTrackSplitter.Split (merged.Tracks [0].Events, parser.Music.DeltaTimeSpec);
 				using (var outfile = File.Create ("testtest.mid")) {
 					var gen = new SmfWriter (outfile);
+					gen.DisableRunningStatus = true;
 					gen.WriteHeader (result.Format, (short)result.Tracks.Count, result.DeltaTimeSpec);
 					foreach (var tr in result.Tracks)
 						gen.WriteTrack (tr);
 				}
-
+*/
 
 				var player = new PortMidiSyncPlayer (output, parser.Music);
 				player.PlayerLoop ();
@@ -150,11 +152,6 @@ namespace Commons.Music.Midi
 		{
 			if (e.DeltaTime != 0) {
 				var ms = GetDeltaTimeInMilliseconds (e.DeltaTime);
-if (e.Message.Value == 0) {
-Console.WriteLine ("!!!!!!!!! empty message at {0} ({1})", PlayDeltaTime, TimeSpan.FromMilliseconds (GetDeltaTimeInMilliseconds (PlayDeltaTime)));
-return; // FIXME: find out why such message is passed.
-}
-//Console.WriteLine ("{0:X08},{1:X} -> {2}", e.Message.Value, e.DeltaTime, TimeSpan.FromMilliseconds (ms));
 				Thread.Sleep (ms);
 			}
 			if (e.Message.StatusByte == 0xFF && e.Message.Msb == 0x51)

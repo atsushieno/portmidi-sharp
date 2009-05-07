@@ -166,6 +166,8 @@ namespace Commons.Music.Midi
 			this.stream = stream;
 		}
 
+		public bool DisableRunningStatus { get; set; }
+
 		void WriteShort (short v)
 		{
 			stream.WriteByte ((byte) (v / 0x100));
@@ -199,7 +201,7 @@ namespace Commons.Music.Midi
 
 			foreach (SmfEvent e in track.Events) {
 				Write7BitVariableInteger (e.DeltaTime);
-				if (running_status >= 0xF0 || e.Message.StatusByte != running_status)
+				if (DisableRunningStatus || running_status >= 0xF0 || e.Message.StatusByte != running_status)
 					stream.WriteByte (e.Message.StatusByte);
 				running_status = e.Message.StatusByte;
 				switch (e.Message.MessageType) {
@@ -246,7 +248,7 @@ namespace Commons.Music.Midi
 				size += GetVariantLength (e.DeltaTime);
 
 				// message type & channel
-				if (running_status >= 0xF0 || running_status != e.Message.StatusByte)
+				if (DisableRunningStatus || running_status >= 0xF0 || running_status != e.Message.StatusByte)
 					size++;
 				running_status = e.Message.StatusByte;
 
@@ -451,6 +453,13 @@ namespace Commons.Music.Midi
 		}
 	}
 
+	public class SmfParserException : Exception
+	{
+		public SmfParserException () : this ("SMF parser error") {}
+		public SmfParserException (string message) : base (message) {}
+		public SmfParserException (string message, Exception innerException) : base (message, innerException) {}
+	}
+
 	public class SmfTrackMerger
 	{
 		public static SmfMusic Merge (SmfMusic source)
@@ -616,12 +625,5 @@ if (l.Count != l2.Count) throw new Exception (String.Format ("Internal eror: cou
 				m.Tracks.Add (t.Track);
 			return m;
 		}
-	}
-
-	public class SmfParserException : Exception
-	{
-		public SmfParserException () : this ("SMF parser error") {}
-		public SmfParserException (string message) : base (message) {}
-		public SmfParserException (string message, Exception innerException) : base (message, innerException) {}
 	}
 }
