@@ -144,7 +144,6 @@ namespace Commons.Music.Midi
 			{
 				Width = Mmk.btSize;
 				Height = Mmk.btSize;
-				Enabled = false;
 			}
 
 			protected override void OnGotFocus (EventArgs e)
