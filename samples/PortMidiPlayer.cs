@@ -17,7 +17,7 @@ namespace Commons.Music.Midi
 				parser.Parse ();
 #if true
 /* // test reader/writer sanity
-				using (var outfile = File.OpenWrite ("testtest.mid")) {
+				using (var outfile = File.Create ("testtest.mid")) {
 					var data = parser.Music;
 					var gen = new SmfWriter (outfile);
 					gen.WriteHeader (data.Format, (short)data.Tracks.Count, data.DeltaTimeSpec);
@@ -25,6 +25,18 @@ namespace Commons.Music.Midi
 						gen.WriteTrack (tr);
 				}
 */
+// test merger/splitter
+				var merged = SmfTrackMerger.Merge (parser.Music);
+//				var result = merged;
+				var result = SmfTrackSplitter.Split (merged.Tracks [0].Events, parser.Music.DeltaTimeSpec);
+				using (var outfile = File.Create ("testtest.mid")) {
+					var gen = new SmfWriter (outfile);
+					gen.WriteHeader (result.Format, (short)result.Tracks.Count, result.DeltaTimeSpec);
+					foreach (var tr in result.Tracks)
+						gen.WriteTrack (tr);
+				}
+
+
 				var player = new PortMidiSyncPlayer (output, parser.Music);
 				player.PlayerLoop ();
 #else
@@ -68,7 +80,7 @@ namespace Commons.Music.Midi
 
 			this.output = output;
 			this.music = music;
-			events = SmfEventMerger.Merge (music);
+			events = SmfTrackMerger.Merge (music).Tracks [0].Events;
 		}
 
 		MidiOutput output;
@@ -142,10 +154,10 @@ if (e.Message.Value == 0) {
 Console.WriteLine ("!!!!!!!!! empty message at {0} ({1})", PlayDeltaTime, TimeSpan.FromMilliseconds (GetDeltaTimeInMilliseconds (PlayDeltaTime)));
 return; // FIXME: find out why such message is passed.
 }
-//Console.WriteLine ("{0:X},{1:X} -> {2}", e.Message.Value, e.DeltaTime, TimeSpan.FromMilliseconds (ms));
+//Console.WriteLine ("{0:X08},{1:X} -> {2}", e.Message.Value, e.DeltaTime, TimeSpan.FromMilliseconds (ms));
 				Thread.Sleep (ms);
 			}
-			if ((e.Message.Value & 0xFF) == 0xFF && (e.Message.Value & 0xFF00) == 0x5100)
+			if (e.Message.StatusByte == 0xFF && e.Message.Msb == 0x51)
 				current_tempo = (e.Message.Data [0] << 16) + (e.Message.Data [1] << 8) + e.Message.Data [2];
 
 			OnMessage (e);
@@ -161,7 +173,7 @@ return; // FIXME: find out why such message is passed.
 			else if ((e.Message.Value & 0xFF) == 0xFF)
 				return; // meta. Nothing to send.
 			else
-				output.Write (0, new MidiMessage (e.Message.Value));
+				output.Write (0, new MidiMessage (e.Message.StatusByte, e.Message.Msb, e.Message.Lsb));
 		}
 
 		public void Stop ()

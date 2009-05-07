@@ -30,7 +30,19 @@ namespace Commons.Music.Midi
 
 	public class SmfTrack
 	{
-		List<SmfEvent> events = new List<SmfEvent> ();
+		public SmfTrack ()
+			: this (new List<SmfEvent> ())
+		{
+		}
+
+		public SmfTrack (IList<SmfEvent> events)
+		{
+			if (events == null)
+				throw new ArgumentNullException ("events");
+			this.events = events as List<SmfEvent> ?? new List<SmfEvent> (events);
+		}
+
+		List<SmfEvent> events;
 
 		public void AddEvent (SmfEvent evt)
 		{
@@ -52,6 +64,11 @@ namespace Commons.Music.Midi
 
 		public readonly int DeltaTime;
 		public readonly SmfMessage Message;
+
+		public override string ToString ()
+		{
+			return String.Format ("[dt{0}]{1}", DeltaTime, Message);
+		}
 	}
 
 	public struct SmfMessage
@@ -131,6 +148,11 @@ namespace Commons.Music.Midi
 				return 2;
 			}
 		}
+
+		public override string ToString ()
+		{
+			return String.Format ("{0:X02}:{1:X02}:{2:X02}{3}", StatusByte, Msb, Lsb, Data != null ? Data.Length + "[data]" : "");
+		}
 	}
 
 	public class SmfWriter
@@ -205,6 +227,8 @@ namespace Commons.Music.Midi
 
 		int GetVariantLength (int value)
 		{
+			if (value < 0)
+				throw new ArgumentOutOfRangeException (String.Format ("Length must be non-negative integer: {0}", value));
 			if (value == 0)
 				return 1;
 			int ret = 0;
@@ -427,41 +451,72 @@ namespace Commons.Music.Midi
 		}
 	}
 
-	public class SmfEventMerger
+	public class SmfTrackMerger
 	{
-		public static IList<SmfEvent> Merge (SmfMusic source)
+		public static SmfMusic Merge (SmfMusic source)
 		{
-			return new SmfEventMerger (source).GetMergedEvents ();
+			return new SmfTrackMerger (source).GetMergedEvents ();
 		}
 
-		SmfEventMerger (SmfMusic source)
+		SmfTrackMerger (SmfMusic source)
 		{
 			this.source = source;
 		}
 
 		SmfMusic source;
 
-		IList<SmfEvent> GetMergedEvents ()
+		SmfMusic GetMergedEvents ()
 		{
-			var l = new List<SmfEvent> ();
+			IList<SmfEvent> l = new List<SmfEvent> ();
 
 			foreach (var track in source.Tracks) {
 				int delta = 0;
-//Console.WriteLine ("----");
 				foreach (var mev in track.Events) {
-//Console.WriteLine ("[[ {0:X04} {1:X04} {2:X02} {3:X02} {4:X02} {5}]]", mev.DeltaTime, delta, mev.EventCode, mev.Arguments.Length > 0 ? mev.Arguments [0] : -1, mev.Arguments.Length > 1 ? mev.Arguments [1] : -1, mev.Definition.Name);
-if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.MessageType, mev.DeltaTime);
 					delta += mev.DeltaTime;
 					l.Add (new SmfEvent (delta, mev.Message));
 				}
-				var last = new SmfEvent (delta, new SmfMessage (0)); // dummy, has Value of 0.
-				l.Add (last);
 			}
 
 			if (l.Count == 0)
-				return l; // empty (why did you need to sort your song file?)
+				return new SmfMusic () { DeltaTimeSpec = source.DeltaTimeSpec }; // empty (why did you need to sort your song file?)
 
-			l.Sort (delegate (SmfEvent e1, SmfEvent e2) { return e1.DeltaTime - e2.DeltaTime; });
+			// Sort() does not always work as expected.
+			// For example, it does not always preserve event 
+			// orders on the same channels when the delta time
+			// of event B after event A is 0. It could be sorted
+			// either as A->B or B->A.
+			//
+			// To resolve this ieeue, we have to sort "chunk"
+			// of events, not all single events themselves, so
+			// that order of events in the same chunk is preserved
+			// i.e. [AB] at 48 and [CDE] at 0 should be sorted as
+			// [CDE] [AB].
+
+			var idxl = new List<int> (l.Count);
+			idxl.Add (0);
+			int prev = 0;
+			for (int i = 0; i < l.Count; i++) {
+				if (l [i].DeltaTime != prev) {
+					idxl.Add (i);
+					prev = l [i].DeltaTime;
+				}
+			}
+
+			idxl.Sort (delegate (int i1, int i2) {
+				return l [i1].DeltaTime - l [i2].DeltaTime;
+				});
+
+			// now build a new event list based on the sorted blocks.
+			var l2 = new List<SmfEvent> (l.Count);
+			int idx;
+			for (int i = 0; i < idxl.Count; i++)
+				for (idx = idxl [i], prev = l [idx].DeltaTime; idx < l.Count && l [idx].DeltaTime == prev; idx++)
+					l2.Add (l [idx]);
+if (l.Count != l2.Count) throw new Exception (String.Format ("Internal eror: count mismatch: l1 {0} l2 {1}", l.Count, l2.Count));
+			l = l2;
+
+			// now events should be sorted correctly.
+
 			var waitToNext = l [0].DeltaTime;
 			for (int i = 0; i < l.Count - 1; i++) {
 				if (l [i].Message.Value != 0) { // if non-dummy
@@ -470,8 +525,96 @@ if (mev.DeltaTime < 0) Console.WriteLine ("!!!!! {0:X} : {1}", mev.Message.Messa
 					waitToNext = tmp;
 				}
 			}
+			l [l.Count - 1] = new SmfEvent (waitToNext, l [l.Count - 1].Message);
 
-			return l;
+			var m = new SmfMusic ();
+			m.DeltaTimeSpec = source.DeltaTimeSpec;
+			m.Format = 0;
+			m.Tracks.Add (new SmfTrack (l));
+			return m;
+		}
+	}
+
+	public class SmfTrackSplitter
+	{
+		public static SmfMusic Split (IList<SmfEvent> source, short deltaTimeSpec)
+		{
+			return new SmfTrackSplitter (source, deltaTimeSpec).Split ();
+		}
+
+		SmfTrackSplitter (IList<SmfEvent> source, short deltaTimeSpec)
+		{
+			if (source == null)
+				throw new ArgumentNullException ("source");
+			this.source = source;
+			delta_time_spec = deltaTimeSpec;
+			var mtr = new SplitTrack (-1);
+			tracks.Add (-1, mtr);
+		}
+
+		IList<SmfEvent> source;
+		short delta_time_spec;
+		Dictionary<int,SplitTrack> tracks = new Dictionary<int,SplitTrack> ();
+
+		class SplitTrack
+		{
+			public SplitTrack (int trackID)
+			{
+				TrackID = trackID;
+				Track = new SmfTrack ();
+			}
+
+			public int TrackID;
+			public int TotalDeltaTime;
+			public SmfTrack Track;
+
+			public void AddEvent (int deltaInsertAt, SmfEvent e)
+			{
+				e = new SmfEvent (deltaInsertAt - TotalDeltaTime, e.Message);
+				Track.Events.Add (e);
+				TotalDeltaTime = deltaInsertAt;
+			}
+		}
+
+		SplitTrack GetTrack (int track)
+		{
+			SplitTrack t;
+			if (!tracks.TryGetValue (track, out t)) {
+				t = new SplitTrack (track);
+				tracks [track] = t;
+			}
+			return t;
+		}
+
+		// Override it to customize track dispatcher. It would be
+		// useful to split note messages out from non-note ones,
+		// to ease data reading.
+		public virtual int GetTrackID (SmfEvent e)
+		{
+			switch (e.Message.MessageType) {
+			case SmfMessage.Meta:
+			case SmfMessage.SysEx1:
+			case SmfMessage.SysEx2:
+				return -1;
+			default:
+				return e.Message.Channel;
+			}
+		}
+
+		public SmfMusic Split ()
+		{
+			int totalDeltaTime = 0;
+			foreach (var e in source) {
+				totalDeltaTime += e.DeltaTime;
+				int id = GetTrackID (e);
+				GetTrack (id).AddEvent (totalDeltaTime, e);
+			}
+
+			var m = new SmfMusic ();
+			m.DeltaTimeSpec = delta_time_spec;
+			foreach (var t in tracks.Values)
+				m.Tracks.Add (t.Track);
+			return m;
 		}
 	}
 
