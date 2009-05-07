@@ -234,15 +234,10 @@ namespace Commons.Music.Midi
 				b.BackColor = this.BackColor;
 			fl [idx] = down;
 
-			// FIXME: verify
 			int note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + idx;
-
-Console.WriteLine (note);
 
 			if (0 <= note && note <= 128)
 				output.Write (0, new MidiMessage (down ? 0x90 : 0x80, note, 100));
-
-//			Console.WriteLine ("{0} {1} {2}", down, low, idx);
 		}
 
 		class KeyMap
