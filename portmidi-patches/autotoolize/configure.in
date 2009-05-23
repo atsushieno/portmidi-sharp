@@ -1,0 +1,90 @@
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ([2.63])
+AC_INIT([portmidi], [0.829], [atsushi@ximian.com])
+
+case "$host" in
+	*-*-mingw*|*-*-cygwin*)
+		libdir=pm_win
+		AC_CONFIG_SRCDIR([pm_win/pmlinux.c])
+		;;
+	*-*-darwin*)
+		libdir=pm_mac
+		AC_CONFIG_SRCDIR([pm_mac/pmmac.c])
+		;;
+	*)
+		libdir=pm_linux
+		AC_CONFIG_SRCDIR([pm_linux/pmlinux.c])
+		;;
+esac
+
+AC_CONFIG_HEADERS([config.h])
+
+AM_CONDITIONAL(PLATFORM_WIN32, test x$platform_win32 = xyes)
+AM_CONDITIONAL(PLATFORM_OSX, test x$platform_darwin = xyes)
+
+AM_INIT_AUTOMAKE
+AM_MAINTAINER_MODE
+
+AC_CONFIG_FILES([Makefile])
+
+# Checks for programs.
+AC_PROG_CXX
+AC_PROG_CC
+AC_PROG_LIBTOOL
+AC_PROG_INSTALL
+AC_HEADER_STDC
+AC_LIBTOOL_WIN32_DLL
+
+AM_PROG_LIBTOOL
+
+DOLT
+
+# Checks for libraries.
+
+# Checks for header files.
+AC_CHECK_HEADERS([stdint.h stdlib.h string.h unistd.h])
+
+case "$host" in
+	*-*-mingw*|*-*-cygwin*)
+		;;
+	*-*-darwin*)
+		;;
+	*)
+		AC_CHECK_HEADERS([alsa/asoundlib.h])
+		PMALSA=1
+		AC_SUBST(PMALSA)
+		;;
+esac
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_HEADER_STDBOOL
+AC_TYPE_INT64_T
+AC_TYPE_SIZE_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+
+# Checks for library functions.
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([atexit bzero ftime select strstr])
+
+AC_OUTPUT([
+porttime/Makefile
+$libdir/Makefile
+])
+
+
+# fix libtool for win32 build. Taken from mono configure.in
+case "$host" in
+	*-*-mingw*|*-*-cygwin*)
+		# Get rid of 'cyg' prefixes in library names
+		sed -e "s/\/cyg\//\/\//" libtool > libtool.new; mv libtool.new libtool; chmod 755 libtool
+		# libtool seems to inherit -mno-cygwin from our CFLAGS, and uses it to compile its executable
+		# wrapper scripts which use exec(). gcc has no problem compiling+linking this, but the resulting
+		# executable doesn't work...
+		sed -e "s,-mno-cygwin,,g" libtool > libtool.new; mv libtool.new libtool; chmod 755 libtool
+		;;
+esac
+
