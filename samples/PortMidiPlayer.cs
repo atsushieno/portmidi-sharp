@@ -3,7 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+#if Moonlight
+using MidiOutput = System.IntPtr;
+#else
 using PortMidiSharp;
+#endif
 
 namespace Commons.Music.Midi
 {
@@ -11,7 +15,11 @@ namespace Commons.Music.Midi
 	{
 		public static void Main (string [] args)
 		{
+#if Moonlight
+			var output = IntPtr.Zero;
+#else
 			var output = MidiDeviceManager.OpenOutput (MidiDeviceManager.DefaultOutputDeviceID);
+#endif
 			foreach (var arg in args) {
 				var parser = new SmfReader (File.OpenRead (arg));
 				parser.Parse ();
@@ -95,7 +103,10 @@ namespace Commons.Music.Midi
 
 		public void Dispose ()
 		{
+#if Moonlight
+#else
 			output.Close ();
+#endif
 		}
 
 		public void Play ()
@@ -170,7 +181,11 @@ namespace Commons.Music.Midi
 			else if ((e.Message.Value & 0xFF) == 0xFF)
 				return; // meta. Nothing to send.
 			else
+#if Moonlight
+				;
+#else
 				output.Write (0, new MidiMessage (e.Message.StatusByte, e.Message.Msb, e.Message.Lsb));
+#endif
 		}
 
 		public void Stop ()
