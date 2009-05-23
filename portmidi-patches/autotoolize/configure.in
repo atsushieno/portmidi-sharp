@@ -1,31 +1,39 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.63])
-AC_INIT([portmidi], [0.829], [atsushi@ximian.com])
+AC_INIT(README)
+AC_CANONICAL_SYSTEM
+
+AM_CONFIG_HEADER(config.h)
+AM_INIT_AUTOMAKE(portmidi,0.829)
+AM_MAINTAINER_MODE
+
+AC_MSG_CHECKING([host platform characteristics])
 
 case "$host" in
 	*-*-mingw*|*-*-cygwin*)
 		libdir=pm_win
+		platform_win32=yes
+		platform_osx=no
 		AC_CONFIG_SRCDIR([pm_win/pmwin.c])
 		;;
 	*-*-darwin*)
 		libdir=pm_mac
+		platform_win32=no
+		platform_osx=yes
 		AC_CONFIG_SRCDIR([pm_mac/pmmac.c])
 		;;
 	*)
+		AC_MSG_WARN([*** Linux or some unknown OS ***])
 		libdir=pm_linux
+		platform_win32=no
+		platform_osx=no
 		AC_CONFIG_SRCDIR([pm_linux/pmlinux.c])
 		;;
 esac
 
-AC_CONFIG_HEADERS([config.h])
-
 AM_CONDITIONAL(PLATFORM_WIN32, test x$platform_win32 = xyes)
-AM_CONDITIONAL(PLATFORM_OSX, test x$platform_darwin = xyes)
-
-AM_INIT_AUTOMAKE
-AM_MAINTAINER_MODE
+AM_CONDITIONAL(PLATFORM_OSX, test x$platform_osx = xyes)
 
 AC_CONFIG_FILES([Makefile])
 

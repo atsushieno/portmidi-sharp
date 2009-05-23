@@ -1,7 +1,15 @@
+
+if [ -z "$LIBTOOL" ]; then
+  LIBTOOL=`which glibtool 2>/dev/null`
+  if [ ! -x "$LIBTOOL" ]; then
+    LIBTOOL=`which libtool`
+  fi
+fi
+
 touch AUTHORS README NEWS ChangeLog
-glibtoolize --force --copy
+${LIBTOOL}ize --force --copy
 aclocal
 autoheader
 automake -a -c --add-missing
 autoconf
-./configure
+./configure --enable-maintainer-mode --enable-compile-warnings
