@@ -80,7 +80,9 @@ AC_CHECK_FUNCS([atexit bzero ftime select strstr])
 
 AC_OUTPUT([
 porttime/Makefile
-$libdir/Makefile
+pm_linux/Makefile
+pm_win/Makefile
+pm_mac/Makefile
 ])
 
 
