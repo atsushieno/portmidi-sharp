@@ -32,6 +32,7 @@ namespace Commons.Music.Midi
 
 			this.Width = 400;
 			this.Height = 300;
+			this.Text = "MMK: MIDI Keyboard";
 
 			SetupMenus ();
 
