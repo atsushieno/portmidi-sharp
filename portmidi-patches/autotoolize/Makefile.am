@@ -7,6 +7,6 @@ else
 if PLATFORM_OSX
 SUBDIRS = pm_mac pm_test
 else
-SUBIDRS = pm_linux pm_test
+SUBDIRS = pm_linux pm_test
 endif
 endif
