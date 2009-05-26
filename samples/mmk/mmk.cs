@@ -12,6 +12,12 @@ namespace Commons.Music.Midi
 	{
 		static readonly List<string> tone_list;
 
+#if CHROMA_TONE
+		public const bool ChromaTone = true;
+#else
+		public const bool ChromaTone = false;
+#endif
+
 		static Mmk ()
 		{
 			tone_list = new List<string> ();
@@ -30,7 +36,7 @@ namespace Commons.Music.Midi
 		{
 			SetupMidiDevices ();
 
-			this.Width = 400;
+			this.Width = 420;
 			this.Height = 300;
 			this.Text = "MMK: MIDI Keyboard";
 
@@ -131,7 +137,7 @@ namespace Commons.Music.Midi
 			var hl = new List<Button> ();
 			for (int i = 0; i < keymap.HighKeys.Length; i++) {
 				var b = new NoteButton ();
-				if (i == 4 || i == 10 || i == 18) {
+				if (!IsNotableIndex (i)) {
 					b.Enabled = false;
 					b.Visible = false;
 				}
@@ -143,7 +149,7 @@ namespace Commons.Music.Midi
 			var ll = new List<Button> ();
 			for (int i = 0; i < keymap.LowKeys.Length; i++) {
 				var b = new NoteButton ();
-				if (i == 4 || i == 10 || i == 18) {
+				if (!IsNotableIndex (i)) {
 					b.Enabled = false;
 					b.Visible = false;
 				}
@@ -193,6 +199,9 @@ namespace Commons.Music.Midi
 		// check if the key is a notable key (in mmk).
 		bool IsNotableIndex (int i)
 		{
+			if (ChromaTone)
+				return true;
+
 			switch (i) {
 			case 4:
 			case 10:
@@ -254,17 +263,23 @@ namespace Commons.Music.Midi
 				b.BackColor = this.BackColor;
 			fl [idx] = down;
 
-			int nid;
-			if (idx < 4)
-				nid = idx;
-			else if (idx < 10)
-				nid = idx - 1;
-			else if (idx < 18)
-				nid = idx - 2;
-			else
-				nid = idx - 3;
+			int nid = idx;
+			if (!ChromaTone) {
+				if (idx < 4)
+					nid = idx;
+				else if (idx < 10)
+					nid = idx - 1;
+				else if (idx < 18)
+					nid = idx - 2;
+				else
+					nid = idx - 3;
+			}
 
-			int note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + nid;
+			int note;
+			if (ChromaTone)
+				note = octave * 12 - 4 + transpose + nid + (low ? 2 : 0);
+			else
+				note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + nid;
 
 			if (0 <= note && note <= 128)
 				output.Write (0, new MidiMessage (down ? 0x90 : 0x80, note, 100));
@@ -284,7 +299,7 @@ namespace Commons.Music.Midi
 			// [LEFT] - <del>transpose decrease</del>
 			// [RIGHT] - <del>transpose increase</del>
 
-			public static readonly KeyMap JP106 = new KeyMap ("AZSXDCFVGBHNJMK\xbcL\xbe\xbb\xbf\xba\xe2\xdd]", "1Q2W3E4R5T6Y7U8I9O0P\xbd\xc0\xde\xdb\xdc");
+			public static readonly KeyMap JP106 = new KeyMap ("AZSXDCFVGBHNJMK\xbcL\xbe\xbb\xbf\xba\xe2\xdd", "1Q2W3E4R5T6Y7U8I9O0P\xbd\xc0\xde\xdb\xdc");
 
 			public KeyMap (string lowKeys, string highKeys)
 			{
