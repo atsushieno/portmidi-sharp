@@ -128,22 +128,24 @@ namespace Commons.Music.Midi
 
 			// offset 4, 10, 18 are not mapped, so skip those numbers
 			var hl = new List<Button> ();
-			for (int i = 0, j = 0; i < keymap.HighKeys.Length; i++) {
-				if (i == 4 || i == 10 || i == 18)
-					continue;
-				j++;
+			for (int i = 0; i < keymap.HighKeys.Length; i++) {
 				var b = new NoteButton ();
+				if (i == 4 || i == 10 || i == 18) {
+					b.Enabled = false;
+					b.Visible = false;
+				}
 				b.Location = new Point (btSize / 2 + i * btSize / 2, i % 2 == 0 ? top : top + 5 + btSize);
 				hl.Add (b);
 				Controls.Add (b);
 			}
 			high_buttons = hl.ToArray ();
 			var ll = new List<Button> ();
-			for (int i = 0, j = 0; i < keymap.HighKeys.Length; i++) {
-				if (i == 4 || i == 10 || i == 18)
-					continue;
-				j++;
+			for (int i = 0; i < keymap.LowKeys.Length; i++) {
 				var b = new NoteButton ();
+				if (i == 4 || i == 10 || i == 18) {
+					b.Enabled = false;
+					b.Visible = false;
+				}
 				b.Location = new Point (btSize + i * btSize / 2, i % 2 == 0 ? top + 10 + btSize * 2 : top + 15 + btSize * 3);
 				ll.Add (b);
 				Controls.Add (b);
@@ -155,7 +157,7 @@ namespace Commons.Music.Midi
 
 			var tb = new TextBox ();
 			tb.TabIndex = 0;
-			tb.Location = new Point (10, 170);
+			tb.Location = new Point (10, 200);
 			tb.TextChanged += delegate { tb.Text = String.Empty; };
 			Controls.Add (tb);
 			tb.KeyDown += delegate (object o, KeyEventArgs e) {
@@ -166,7 +168,7 @@ namespace Commons.Music.Midi
 			};
 		}
 
-		static int btSize = 20;
+		static int btSize = 25;
 		Button [] high_buttons;
 		Button [] low_buttons;
 		bool [] high_button_states;
@@ -185,6 +187,18 @@ namespace Commons.Music.Midi
 			{
 				Form.ActiveForm.Focus ();
 			}
+		}
+
+		// check if the key is a notable key (in mmk).
+		bool IsNotableIndex (int i)
+		{
+			switch (i) {
+			case 4:
+			case 10:
+			case 18:
+				return false;
+			}
+			return true;
 		}
 
 		void ProcessKey (bool down, KeyEventArgs e)
@@ -207,10 +221,15 @@ namespace Commons.Music.Midi
 //				break;
 			default:
 				var idx = keymap.LowKeys.IndexOf ((char) key);
+				if (!IsNotableIndex (idx))
+					return;
+
 				if (idx >= 0)
 					ProcessNodeKey (down, true, idx);
 				else {
 					idx = keymap.HighKeys.IndexOf ((char) key);
+					if (!IsNotableIndex (idx))
+						return;
 					if (idx >= 0)
 						ProcessNodeKey (down, false, idx);
 					else
@@ -234,7 +253,17 @@ namespace Commons.Music.Midi
 				b.BackColor = this.BackColor;
 			fl [idx] = down;
 
-			int note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + idx;
+			int nid;
+			if (idx < 4)
+				nid = idx;
+			else if (idx < 10)
+				nid = idx - 1;
+			else if (idx < 18)
+				nid = idx - 2;
+			else
+				nid = idx - 3;
+
+			int note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + nid;
 
 			if (0 <= note && note <= 128)
 				output.Write (0, new MidiMessage (down ? 0x90 : 0x80, note, 100));
@@ -254,8 +283,7 @@ namespace Commons.Music.Midi
 			// [LEFT] - <del>transpose decrease</del>
 			// [RIGHT] - <del>transpose increase</del>
 
-			public static readonly KeyMap JP106 = new KeyMap ("AZSXCFVGBNJMK\xbcL\xbe\xbf\xba\xe2\xdd]", "1Q2WE4R5TY7U8I9OP\xbd\xc0\xde\xdb\xdc"); // 3, 6, 0 and D, H, + are not mapped.
-			public static readonly KeyMap US = new KeyMap ("AZSXCFVGBNJMK\xbcL\xbe\xbf\xba\xe2\xdd]", "1Q2WE4R5TY7U8I9OP\xbd\xc0\xde\xdb\xdc"); // FIXME: get correct mapping
+			public static readonly KeyMap JP106 = new KeyMap ("AZSXDCFVGBHNJMK\xbcL\xbe\xbb\xbf\xba\xe2\xdd]", "1Q2W3E4R5T6Y7U8I9O0P\xbd\xc0\xde\xdb\xdc");
 
 			public KeyMap (string lowKeys, string highKeys)
 			{
