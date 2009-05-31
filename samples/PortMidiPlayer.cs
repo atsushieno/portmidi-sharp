@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using Commons.Music.Midi;
 #if Moonlight
 using MidiOutput = System.IntPtr;
+using System.Windows;
 #else
 using PortMidiSharp;
+using Timer = System.Timers.Timer;
 #endif
 
-namespace Commons.Music.Midi
+namespace Commons.Music.Midi.Player
 {
 	public class Driver
 	{
@@ -20,10 +23,17 @@ namespace Commons.Music.Midi
 #else
 			var output = MidiDeviceManager.OpenOutput (MidiDeviceManager.DefaultOutputDeviceID);
 #endif
+
+			bool syncMode = false;
+
 			foreach (var arg in args) {
+				if (arg == "--sync") {
+					syncMode = true;
+					continue;
+				}
 				var parser = new SmfReader (File.OpenRead (arg));
 				parser.Parse ();
-#if true
+#if false
 /* // test reader/writer sanity
 				using (var outfile = File.Create ("testtest.mid")) {
 					var data = parser.Music;
@@ -46,16 +56,22 @@ namespace Commons.Music.Midi
 						gen.WriteTrack (tr);
 				}
 */
-
-				var player = new PortMidiSyncPlayer (output, parser.Music);
-				player.PlayerLoop ();
 #else
-				var player = new PortMidiPlayer (output, parser.MusicData);
+
+				// To sync player, just use it.
+				if (syncMode) {
+					var syncPlayer = new PortMidiSyncPlayer (output, parser.Music);
+					syncPlayer.PlayerLoop ();
+					return;
+				}
+
+				var player = new PortMidiPlayer (output, parser.Music);
+				player.StartLoop ();
 				player.PlayAsync ();
-				Console.WriteLine ("empty line to quit, P to pause");
+				Console.WriteLine ("empty line to quit, P to pause and resume");
 				while (true) {
 					string line = Console.ReadLine ();
-					if (line == "p") {
+					if (line == "P") {
 						if (player.State == PlayerState.Playing)
 							player.PauseAsync ();
 						else
@@ -65,6 +81,8 @@ namespace Commons.Music.Midi
 						player.Dispose ();
 						break;
 					}
+					else
+						Console.WriteLine ("what do you mean by '{0}' ?", line);
 				}
 #endif
 			}
@@ -111,10 +129,8 @@ namespace Commons.Music.Midi
 
 		public void Play ()
 		{
-			if (pause_handle != null) {
+			if (pause_handle != null)
 				pause_handle.Set ();
-				pause_handle = null;
-			}
 		}
 
 		public void Pause ()
@@ -126,18 +142,24 @@ namespace Commons.Music.Midi
 
 		public void PlayerLoop ()
 		{
-			while (true) {
-				pause_handle.WaitOne ();
-				if (stop)
-					break;
-				if (pause) {
-					pause_handle.Reset ();
-					pause = false;
-					continue;
+			try {
+				while (true) {
+					pause_handle.WaitOne ();
+					if (stop)
+						break;
+					if (pause) {
+						pause_handle.Reset ();
+						pause = false;
+						continue;
+					}
+					if (event_idx == events.Count)
+						break;
+					HandleEvent (events [event_idx++]);
 				}
-				if (event_idx == events.Count)
-					break;
-				HandleEvent (events [event_idx++]);
+			} catch (ThreadAbortException ex) {
+				Console.WriteLine ("Aborted player loop");
+				// FIXME: call pause (to shut down all notes)
+				// FIXME: call ResetAbort()
 			}
 		}
 
@@ -212,22 +234,39 @@ namespace Commons.Music.Midi
 
 		public PortMidiPlayer (MidiOutput output, SmfMusic music)
 		{
-			player = new PortMidiSyncPlayer (output, music);
-			sync_player_thread = new Thread (new ThreadStart (delegate { player.Play (); }));
 			State = PlayerState.Stopped;
+			player = new PortMidiSyncPlayer (output, music);
+			ThreadStart ts = delegate {
+				player.Pause ();
+				player.PlayerLoop ();
+				};
+			sync_player_thread = new Thread (ts);
 		}
 
 		public PlayerState State { get; set; }
 
 		public void Dispose ()
 		{
-			player.Dispose ();
-			if (sync_player_thread.ThreadState == ThreadState.Running)
+			switch (sync_player_thread.ThreadState) {
+			case ThreadState.Stopped:
+			case ThreadState.AbortRequested:
+			case ThreadState.Aborted:
+				break;
+			default:
 				sync_player_thread.Abort ();
+				break;
+			}
+		}
+
+		public void StartLoop ()
+		{
+			sync_player_thread.Start ();
 		}
 
 		public void PlayAsync ()
 		{
+TextWriter.Null.WriteLine ("STATE: " + State); // FIXME: mono somehow fails to initialize this auto property.
+
 			switch (State) {
 			case PlayerState.Playing:
 				return; // do nothing
@@ -237,6 +276,7 @@ namespace Commons.Music.Midi
 				return;
 			case PlayerState.Stopped:
 				player.Play ();
+				State = PlayerState.Playing;
 				return;
 			}
 		}
@@ -254,3 +294,4 @@ namespace Commons.Music.Midi
 		}
 	}
 }
+
