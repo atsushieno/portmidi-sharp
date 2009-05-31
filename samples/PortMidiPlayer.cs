@@ -172,12 +172,20 @@ namespace Commons.Music.Midi
 			PlayDeltaTime += e.DeltaTime;
 		}
 
+		void WriteSysEx (byte status, byte [] sysex)
+		{
+			var buf = new byte [sysex.Length + 1];
+			buf [0] = status;
+			Array.Copy (sysex, 0, buf, 1, buf.Length - 1);
+			output.WriteSysEx (0, buf);
+		}
+
 		protected virtual void OnMessage (SmfEvent e)
 		{
 			if ((e.Message.Value & 0xFF) == 0xF0)
-				;//output.WriteSysEx (0, e.SysEx);
+				WriteSysEx (0xF0, e.Message.Data);
 			else if ((e.Message.Value & 0xFF) == 0xF7)
-				;//output.WriteSysEx (0, e.SysEx);
+				WriteSysEx (0xF7, e.Message.Data);
 			else if ((e.Message.Value & 0xFF) == 0xFF)
 				return; // meta. Nothing to send.
 			else
