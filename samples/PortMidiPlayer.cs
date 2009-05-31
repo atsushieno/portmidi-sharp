@@ -6,7 +6,7 @@ using System.Threading;
 using Commons.Music.Midi;
 #if Moonlight
 using MidiOutput = System.IntPtr;
-using System.Windows;
+using System.Windows.Threading;
 #else
 using PortMidiSharp;
 using Timer = System.Timers.Timer;
@@ -95,6 +95,8 @@ namespace Commons.Music.Midi.Player
 		Playing,
 		Paused
 	}
+
+	public delegate void MidiMessageAction (SmfEvent ev);
 
 	// Player implementation. Plays a MIDI song synchronously.
 	public class PortMidiSyncPlayer : IDisposable
@@ -199,11 +201,25 @@ namespace Commons.Music.Midi.Player
 			var buf = new byte [sysex.Length + 1];
 			buf [0] = status;
 			Array.Copy (sysex, 0, buf, 1, buf.Length - 1);
+#if Moonlight
+#else
 			output.WriteSysEx (0, buf);
+#endif
 		}
+
+		public MidiMessageAction MessageReceived;
 
 		protected virtual void OnMessage (SmfEvent e)
 		{
+			if (MessageReceived != null)
+				MessageReceived (e);
+			SendMidiMessage (e);
+		}
+
+		void SendMidiMessage (SmfEvent e)
+		{
+#if Moonlight
+#else
 			if ((e.Message.Value & 0xFF) == 0xF0)
 				WriteSysEx (0xF0, e.Message.Data);
 			else if ((e.Message.Value & 0xFF) == 0xF7)
@@ -211,9 +227,6 @@ namespace Commons.Music.Midi.Player
 			else if ((e.Message.Value & 0xFF) == 0xFF)
 				return; // meta. Nothing to send.
 			else
-#if Moonlight
-				;
-#else
 				output.Write (0, new MidiMessage (e.Message.StatusByte, e.Message.Msb, e.Message.Lsb));
 #endif
 		}
@@ -244,6 +257,11 @@ namespace Commons.Music.Midi.Player
 		}
 
 		public PlayerState State { get; set; }
+
+		public event MidiMessageAction MessageReceived {
+			add { player.MessageReceived += value; }
+			remove { player.MessageReceived -= value; }
+		}
 
 		public void Dispose ()
 		{
@@ -325,7 +343,7 @@ TextWriter.Null.WriteLine ("STATE: " + State); // FIXME: mono somehow fails to i
 
 		public override void SetNextWait (int milliseconds)
 		{
-			timer.Interval = (double) milliseconds;
+			timer.Interval = TimeSpan.FromMilliseconds (milliseconds);
 			timer.Start ();
 		}
 	}
