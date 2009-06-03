@@ -521,7 +521,7 @@ namespace Commons.Music.Midi
 			for (int i = 0; i < idxl.Count; i++)
 				for (idx = idxl [i], prev = l [idx].DeltaTime; idx < l.Count && l [idx].DeltaTime == prev; idx++)
 					l2.Add (l [idx]);
-if (l.Count != l2.Count) throw new Exception (String.Format ("Internal eror: count mismatch: l1 {0} l2 {1}", l.Count, l2.Count));
+//if (l.Count != l2.Count) throw new Exception (String.Format ("Internal eror: count mismatch: l1 {0} l2 {1}", l.Count, l2.Count));
 			l = l2;
 
 			// now events should be sorted correctly.
