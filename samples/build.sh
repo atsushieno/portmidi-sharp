@@ -1,1 +1,1 @@
-gmcs PortMidiPlayer.cs ../PortMidiSharp.cs SMF.cs -debug
+gmcs PortMidiPlayer.cs MidiPlayer.cs Driver.cs ../PortMidiSharp.cs SMF.cs -debug
