@@ -11,11 +11,22 @@ namespace Commons.Music.Midi.Player
 	{
 		Stopped,
 		Playing,
-		Paused
+		Paused,
+		FastForward,
+		Rewind,
+		Loading
+	}
+
+	public interface IMidiPlayerStatus
+	{
+		PlayerState State { get; }
+		int Tempo { get; }
+		int PlayDeltaTime { get; }
+		int GetTotalPlayTimeMilliseconds ();
 	}
 
 	// Player implementation. Plays a MIDI song synchronously.
-	public class MidiSyncPlayer : IDisposable
+	public class MidiSyncPlayer : IDisposable, IMidiPlayerStatus
 	{
 		public MidiSyncPlayer (SmfMusic music)
 		{
@@ -24,6 +35,7 @@ namespace Commons.Music.Midi.Player
 
 			this.music = music;
 			events = SmfTrackMerger.Merge (music).Tracks [0].Events;
+			stop = true;
 		}
 
 		SmfMusic music;
@@ -31,7 +43,17 @@ namespace Commons.Music.Midi.Player
 		ManualResetEvent pause_handle = new ManualResetEvent (true);
 		bool pause, stop;
 
+		public PlayerState State {
+			get { return stop ? PlayerState.Stopped : pause ? PlayerState.Paused : PlayerState.Playing; }
+		}
 		public int PlayDeltaTime { get; set; }
+		public int Tempo {
+			get { return current_tempo; }
+		}
+		public int GetTotalPlayTimeMilliseconds ()
+		{
+			return SmfMusic.GetTotalPlayTimeMilliseconds (events, music.DeltaTimeSpec);
+		}
 
 		public virtual void Dispose ()
 		{
@@ -68,6 +90,7 @@ namespace Commons.Music.Midi.Player
 
 		public void PlayerLoop ()
 		{
+			stop = false;
 			Mute ();
 			AllControlReset ();
 			try {
@@ -90,7 +113,7 @@ namespace Commons.Music.Midi.Player
 			}
 		}
 
-		int current_tempo = 500000; // dummy
+		int current_tempo = SmfMetaType.DefaultTempo; // dummy
 		int tempo_ratio = 1;
 
 		int GetDeltaTimeInMilliseconds (int deltaTime)
@@ -114,8 +137,8 @@ namespace Commons.Music.Midi.Player
 				var ms = GetDeltaTimeInMilliseconds (e.DeltaTime);
 				Thread.Sleep (ms);
 			}
-			if (e.Message.StatusByte == 0xFF && e.Message.Msb == 0x51)
-				current_tempo = (e.Message.Data [0] << 16) + (e.Message.Data [1] << 8) + e.Message.Data [2];
+			if (e.Message.StatusByte == 0xFF && e.Message.Msb == SmfMetaType.Tempo)
+				current_tempo = SmfMetaType.GetTempo (e.Message.Data);
 
 			OnMessage (e.Message);
 			PlayDeltaTime += e.DeltaTime;
@@ -139,7 +162,7 @@ namespace Commons.Music.Midi.Player
 	}
 
 	// Provides asynchronous player control.
-	public class MidiPlayer : IDisposable
+	public class MidiPlayer : IDisposable, IMidiPlayerStatus
 	{
 		MidiSyncPlayer player;
 		Thread sync_player_thread;
@@ -155,7 +178,17 @@ namespace Commons.Music.Midi.Player
 			sync_player_thread = new Thread (ts);
 		}
 
-		public PlayerState State { get; set; }
+		public PlayerState State { get; private set; }
+		public int Tempo {
+			get { return player.Tempo; }
+		}
+		public int PlayDeltaTime {
+			get { return player.PlayDeltaTime; }
+		}
+		public int GetTotalPlayTimeMilliseconds ()
+		{
+			return player.GetTotalPlayTimeMilliseconds ();
+		}
 
 		public event MidiMessageAction MessageReceived {
 			add { player.MessageReceived += value; }
