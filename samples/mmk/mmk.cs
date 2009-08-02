@@ -127,6 +127,8 @@ namespace Commons.Music.Midi
 			Controls.Add (cb);
 		}
 
+		static readonly string [] key_labels = {"c", "c+", "d", "d+", "e", "", "f", "f+", "g", "g+", "a", "a+", "b", ""};
+
 		void SetupKeyboardLayout (KeyMap map)
 		{
 			keymap = map;
@@ -135,8 +137,11 @@ namespace Commons.Music.Midi
 
 			// offset 4, 10, 18 are not mapped, so skip those numbers
 			var hl = new List<Button> ();
+			int labelStringIndex = key_labels.Length - 5;
 			for (int i = 0; i < keymap.HighKeys.Length; i++) {
 				var b = new NoteButton ();
+				b.Text = key_labels [labelStringIndex % key_labels.Length];
+				labelStringIndex++;
 				if (!IsNotableIndex (i)) {
 					b.Enabled = false;
 					b.Visible = false;
@@ -147,8 +152,11 @@ namespace Commons.Music.Midi
 			}
 			high_buttons = hl.ToArray ();
 			var ll = new List<Button> ();
+			labelStringIndex = key_labels.Length - 5;
 			for (int i = 0; i < keymap.LowKeys.Length; i++) {
 				var b = new NoteButton ();
+				b.Text = key_labels [labelStringIndex % key_labels.Length];
+				labelStringIndex++;
 				if (!IsNotableIndex (i)) {
 					b.Enabled = false;
 					b.Visible = false;
