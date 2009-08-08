@@ -114,22 +114,22 @@ namespace Commons.Music.Midi
 		}
 
 		static readonly string [] tone_categories = {
-			"0 Piano",
-			"8 Chromatic Percussion",
-			"16 Organ",
-			"24 Guitar",
-			"32 Bass",
-			"40 Strings",
-			"48 Ensemble",
-			"56 Brass",
-			"64 Reed",
-			"72 Pipe",
-			"80 Synth Lead",
-			"88 Synth Pad",
-			"96 Synth Effects",
-			"104 Ethnic",
-			"112 Percussive",
-			"120 SFX"
+			"&A 0 Piano",
+			"&B 8 Chromatic Percussion",
+			"&C 16 Organ",
+			"&D 24 Guitar",
+			"&E 32 Bass",
+			"&F 40 Strings",
+			"&G 48 Ensemble",
+			"&H 56 Brass",
+			"&I 64 Reed",
+			"&J 72 Pipe",
+			"&K 80 Synth Lead",
+			"&L 88 Synth Pad",
+			"&M 96 Synth Effects",
+			"&N 104 Ethnic",
+			"&O 112 Percussive",
+			"&P 120 SFX"
 			};
 
 		void SetupToneSelector ()
