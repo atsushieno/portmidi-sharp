@@ -1,20 +1,20 @@
-Acoustic Grand Piano
-Bright Acoustic Piano
+Acoustic Piano
+Bright Piano
 Electric Grand Piano
 Honky-tonk Piano
-Rhodes Piano
-Chorused Piano
+Electric Piano
+Electric Piano 2
 Harpsichord
-Clavinet
+Clavi
 Celesta
 Glockenspiel
-Music Box
+Musical Box
 Vibraphone
 Marimba
 Xylophone
-Tubular Bells
+Tubular Bell
 Dulcimer
-Hammond Organ
+Drawbar Organ
 Percussive Organ
 Rock Organ
 Church Organ
@@ -41,16 +41,16 @@ Synth Bass 2
 Violin
 Viola
 Cello
-Contrabass
+Double bass
 Tremelo Strings
 Pizzicato Strings
 Orchestral Harp
 Timpani
 String Ensemble 1
 String Ensemble 2
-SynthStrings 1
-SynthStrings 2
-Choir Aahs
+Synth Strings 1
+Synth Strings 2
+Voice Aahs
 Voice Oohs
 Synth Voice
 Orchestra Hit
@@ -74,19 +74,19 @@ Piccolo
 Flute
 Recorder
 Pan Flute
-Bottle Blow
+Brown Bottle
 Shakuhachi
 Whistle
-Whistle
 Ocarina
+Lead 1 (square)
 Lead 2 (sawtooth)
-Lead 3 (calliope lead)
-Lead 4 (chiff lead)
+Lead 3 (calliope)
+Lead 4 (chiff)
 Lead 5 (charang)
 Lead 6 (voice)
 Lead 7 (fifths)
 Lead 8 (bass + lead)
-Pad 1 (new age)
+Pad 1 (fantasia)
 Pad 2 (warm)
 Pad 3 (polysynth)
 Pad 4 (choir)
