@@ -164,7 +164,11 @@ namespace Commons.Music.Midi
 #endif
 		}
 
+#if CHROMA_TONE
+		static readonly string [] key_labels = {"c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"};
+#else
 		static readonly string [] key_labels = {"c", "c+", "d", "d+", "e", "", "f", "f+", "g", "g+", "a", "a+", "b", ""};
+#endif
 
 		void SetupKeyboardLayout (KeyMap map)
 		{
