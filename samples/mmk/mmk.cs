@@ -113,8 +113,44 @@ namespace Commons.Music.Midi
 			output.Write (0, new MidiMessage (0xC0, 0, 0));
 		}
 
+		static readonly string [] tone_categories = {
+			"0 Piano",
+			"8 Chromatic Percussion",
+			"16 Organ",
+			"24 Guitar",
+			"32 Bass",
+			"40 Strings",
+			"48 Ensemble",
+			"56 Brass",
+			"64 Reed",
+			"72 Pipe",
+			"80 Synth Lead",
+			"88 Synth Pad",
+			"96 Synth Effects",
+			"104 Ethnic",
+			"112 Percussive",
+			"120 SFX"
+			};
+
 		void SetupToneSelector ()
 		{
+#if true
+			var tone = new MenuItem ("&Tone");
+			this.Menu.MenuItems.Add (tone);
+			MenuItem sub = null;
+			for (int i = 0; i < tone_list.Count; i++) {
+				if (i % 8 == 0) {
+					sub = new MenuItem (tone_categories [i / 8]);
+					tone.MenuItems.Add (sub);
+				}
+				var mi = new MenuItem (tone_list [i]);
+				mi.Tag = i;
+				mi.Select += delegate {
+					output.Write (0, new MidiMessage (0xC0, (int) mi.Tag, 0));
+				};
+				sub.MenuItems.Add (mi);
+			}
+#else
 			ComboBox cb = new ComboBox ();
 			cb.TabIndex = 3;
 			cb.Location = new Point (10, 40);
@@ -125,6 +161,7 @@ namespace Commons.Music.Midi
 				output.Write (0, new MidiMessage (0xC0, cb.SelectedIndex, 0));
 			};
 			Controls.Add (cb);
+#endif
 		}
 
 		static readonly string [] key_labels = {"c", "c+", "d", "d+", "e", "", "f", "f+", "g", "g+", "a", "a+", "b", ""};
