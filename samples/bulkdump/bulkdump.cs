@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -9,32 +10,79 @@ namespace Commons.Music.Midi
 {
 	public class Driver
 	{
-		public static void Main ()
+		public static void Main (string [] args)
 		{
-			int inId, outId;
+			int inId = -1, outId = -1;
+			string filename = null;
+			TimeSpan interval = TimeSpan.Zero;
+			byte [] ex = null;
+			foreach (var arg in args) {
+				if (arg.StartsWith ("--in:")) {
+					if (!int.TryParse (arg.Substring (5), out inId))
+						inId = -1;
+				}
+				if (arg.StartsWith ("--out:")) {
+					if (!int.TryParse (arg.Substring (6), out outId))
+						outId = -1;
+				}
+				if (arg.StartsWith ("--file:"))
+					filename = arg.Substring (7);
+				if (arg.StartsWith ("--interval:")) {
+					int intervalint;
+					if (int.TryParse (arg.Substring (11), out intervalint))
+						interval = TimeSpan.FromMilliseconds (intervalint);
+				}
+				if (arg.StartsWith ("--sysex:")) {
+					string [] l = arg.Substring (8).Split (',');
+					ex = new byte [l.Length];
+					byte v;
+					for (int i = 0; i < ex.Length; i++) {
+						if (byte.TryParse (l [i], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out v))
+							ex [i] = v;
+						else {
+							ex = null;
+							break;
+						}
+					}
+					if (ex == null) {
+						Console.WriteLine ("invalid sysex: " + arg);
+						return;
+					}
+				}
+			}
 			var a = new List<MidiDeviceInfo> (MidiDeviceManager.AllDevices);
-			foreach (var dev in a)
-				if (dev.IsInput)
-					Console.WriteLine ("ID {0}: {1}", dev.ID, dev.Name);
-			Console.WriteLine ("Type number to select MIDI In Device to use (type anything else to quit)");
-			if (!int.TryParse (Console.ReadLine (), out inId))
-				return;
-			foreach (var dev in MidiDeviceManager.AllDevices)
-				if (dev.IsOutput)
-					Console.WriteLine ("ID {0}: {1}", dev.ID, dev.Name);
-			Console.WriteLine ("Type number to select MIDI Out Device to use (type anything else to quit)");
-			if (!int.TryParse (Console.ReadLine (), out outId))
-				return;
+			if (inId < 0) {
+				foreach (var dev in a)
+					if (dev.IsInput)
+						Console.WriteLine ("ID {0}: {1}", dev.ID, dev.Name);
+				Console.WriteLine ("Type number to select MIDI In Device to use (type anything else to quit)");
+				if (!int.TryParse (Console.ReadLine (), out inId))
+					return;
+			}
+			if (outId < 0) {
+				foreach (var dev in a)
+					if (dev.IsOutput)
+						Console.WriteLine ("ID {0}: {1}", dev.ID, dev.Name);
+				Console.WriteLine ("Type number to select MIDI Out Device to use (type anything else to quit)");
+				if (!int.TryParse (Console.ReadLine (), out outId))
+					return;
+			}
 
 			var dump = new BulkDump ();
+			if (interval != TimeSpan.Zero)
+				dump.Interval = interval;
+			if (ex != null)
+				dump.SetSysEx (ex);
 			dump.Start (inId, outId);
 			Console.WriteLine ("Type [CR] to stop receiving");
 			Console.ReadLine ();
 			dump.Stop ();
 
-			Console.Write ("Type filename to save if you want: ");
-			var s = Console.ReadLine ();
-			if (s.Length > 0) {
+			if (String.IsNullOrEmpty (filename)) {
+				Console.Write ("Type filename to save if you want: ");
+				filename = Console.ReadLine ();
+			}
+			if (filename.Length > 0) {
 				var music = new SmfMusic ();
 				var track = new SmfTrack ();
 				foreach (var e in dump.Results) {
@@ -44,7 +92,7 @@ namespace Commons.Music.Midi
 						track.Events.Add (new SmfEvent (e.Timestamp, new SmfMessage (e.Message.Value)));
 				}
 				music.Tracks.Add (track);
-				using (var f = File.OpenWrite (s))
+				using (var f = File.Create (filename))
 					new SmfWriter (f).WriteMusic (music);
 			}
 		}
@@ -54,10 +102,10 @@ namespace Commons.Music.Midi
 	{
 		public BulkDump ()
 		{
-			Interval = TimeSpan.FromMilliseconds (300);
+			Interval = TimeSpan.FromMilliseconds (500);
 		}
 
-		static readonly byte [] sc88 = new byte [] {
+		static readonly byte [] sc88all = new byte [] {
 			0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
 			// addr
 			0x0C, 0x00, 0x00,
@@ -65,8 +113,16 @@ namespace Commons.Music.Midi
 			0x00, 0x00, 0x00,
 			// chksum/EOX
 			0x74, 0xF7 };
+		static readonly byte [] sc88tone = new byte [] {
+			0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
+			// addr
+			0x0C, 0x00, 0x01,
+			// size
+			0x00, 0x00, 0x00,
+			// chksum/EOX
+			0x73, 0xF7 };
 
-		byte [] sysex = sc88;
+		byte [] sysex = sc88tone;
 
 		public void SetSysEx (byte [] data)
 		{
@@ -109,18 +165,12 @@ namespace Commons.Music.Midi
 
 		void Loop ()
 		{
-			int idx = 0;
 			byte [] buf = new byte [0x10000];
 			while (loop) {
 				Thread.Sleep ((int) Interval.TotalMilliseconds); // some interval is required to stably receive messages...
-				int size = input_device.Read (buf, idx, buf.Length - idx);
-// if (size > 0) {
-// Console.WriteLine ("Read {0} bytes", size);
-// for (int z = idx; z < idx + size; z++) Console.Write ("{0:X02} ", buf [z]);
-// Console.WriteLine (); 
-// }
-				idx += size;
-				foreach (var ev in MidiInput.Convert (buf, idx, size))
+				int size = input_device.Read (buf, 0, buf.Length);
+//for (int i = 0; i < size; i++) Console.Write ("{0:X02} ", buf [i]);
+				foreach (var ev in MidiInput.Convert (buf, 0, size))
 					results.Add (ev);
 			}
 		}
