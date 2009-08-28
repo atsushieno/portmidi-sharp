@@ -179,6 +179,10 @@ namespace PortMidiSharp
 		{
 		}
 
+		public bool HasData {
+			get { return PortMidiMarshal.Pm_Poll (stream) == MidiErrorType.GotData; }
+		}
+
 		public int Read (MidiEvent [] buffer, int length)
 		{
 			return PortMidiMarshal.Pm_Read (stream, buffer, length);
