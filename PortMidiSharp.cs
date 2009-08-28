@@ -52,8 +52,15 @@ namespace PortMidiSharp
 
 		public static MidiInput OpenInput (PmDeviceID inputDevice)
 		{
+			return OpenInput (inputDevice, default_buffer_size);
+		}
+
+		const int default_buffer_size = 1024;
+
+		public static MidiInput OpenInput (PmDeviceID inputDevice, int bufferSize)
+		{
 			PortMidiStream stream;
-			var e = PortMidiMarshal.Pm_OpenInput (out stream, inputDevice, IntPtr.Zero, 0, null, IntPtr.Zero);
+			var e = PortMidiMarshal.Pm_OpenInput (out stream, inputDevice, IntPtr.Zero, bufferSize, null, IntPtr.Zero);
 			if (e != PmError.NoError)
 				throw new MidiException (e, String.Format ("Failed to open MIDI input device {0}", e));
 			return new MidiInput (stream, inputDevice);
@@ -174,6 +181,25 @@ namespace PortMidiSharp
 
 	public class MidiInput : MidiStream
 	{
+		public static IEnumerable<MidiEvent> Convert (byte [] bytes, int index, int size)
+		{
+			int i = index;
+			int end = index + size;
+			while (i < end) {
+				if (bytes [i] == 0xF0) {
+					var tmp = new byte [size];
+					Array.Copy (bytes, i, tmp, 0, tmp.Length);
+					yield return new MidiEvent () {Message = new MidiMessage (0xF0, 0, 0), SysEx = tmp};
+					i += size + 1;
+				} else {
+					if (end < i + 3)
+						throw new MidiException (MidiErrorType.NoError, "Received data was incomplete to build MIDI status message");
+					yield return new MidiEvent () {Message = new MidiMessage (bytes [i], bytes [i + 1], bytes [i + 2])};
+					i += 3;
+				}
+			}
+		}
+
 		public MidiInput (PortMidiStream stream, PmDeviceID inputDevice)
 			: base (stream, inputDevice)
 		{
@@ -183,9 +209,12 @@ namespace PortMidiSharp
 			get { return PortMidiMarshal.Pm_Poll (stream) == MidiErrorType.GotData; }
 		}
 
-		public int Read (MidiEvent [] buffer, int length)
+		public int Read (byte [] buffer, int index, int length)
 		{
-			return PortMidiMarshal.Pm_Read (stream, buffer, length);
+			unsafe {
+				fixed (byte *ptr = buffer)
+					return PortMidiMarshal.Pm_Read (stream, ptr + index, length);
+			}
 		}
 	}
 
@@ -255,6 +284,7 @@ namespace PortMidiSharp
 			set { ts = value; }
 		}
 
+		// FIXME: this should be renamed as "Data" (meta events also make use of it)
 		public byte [] SysEx {
 			get { return sysex; }
 			set { sysex = value; }
@@ -391,7 +421,7 @@ namespace PortMidiSharp
 		public static int Pm_MessageData2 (int msg) { return (((msg) >> 16) & 0xFF); }
 
 		[DllImport ("portmidi")]
-		public static extern int Pm_Read (PortMidiStream stream, MidiEvent [] buffer, int length);
+		public static unsafe extern int Pm_Read (PortMidiStream stream, byte * buffer, int length);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_Poll (PortMidiStream stream);
