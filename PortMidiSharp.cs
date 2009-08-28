@@ -50,12 +50,21 @@ namespace PortMidiSharp
 			return new MidiDeviceInfo (id, PortMidiMarshal.Pm_GetDeviceInfo (id));
 		}
 
+		public static MidiInput OpenInput (PmDeviceID inputDevice)
+		{
+			PortMidiStream stream;
+			var e = PortMidiMarshal.Pm_OpenInput (out stream, inputDevice, IntPtr.Zero, 0, null, IntPtr.Zero);
+			if (e != PmError.NoError)
+				throw new MidiException (e, String.Format ("Failed to open MIDI input device {0}", e));
+			return new MidiInput (stream, inputDevice);
+		}
+
 		public static MidiOutput OpenOutput (PmDeviceID outputDevice)
 		{
 			PortMidiStream stream;
 			var e = PortMidiMarshal.Pm_OpenOutput (out stream, outputDevice, IntPtr.Zero, 0, null, IntPtr.Zero, 0);
 			if (e != PmError.NoError)
-				throw new MidiException (e, String.Format ("Failed to open output device {0}", e));
+				throw new MidiException (e, String.Format ("Failed to open MIDI output device {0}", e));
 			return new MidiOutput (stream, outputDevice, 0);
 		}
 	}
