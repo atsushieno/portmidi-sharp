@@ -26,68 +26,102 @@ namespace Commons.Music.Midi
 			if (!int.TryParse (Console.ReadLine (), out outId))
 				return;
 
-			new BulkDump ().Run (inId, outId);
+			var dump = new BulkDump ();
+			dump.Start (inId, outId);
+			Console.WriteLine ("Type [CR] to stop receiving");
+			Console.ReadLine ();
+			dump.Stop ();
+
+			Console.Write ("Type filename to save if you want: ");
+			var s = Console.ReadLine ();
+			if (s.Length > 0) {
+				var music = new SmfMusic ();
+				var track = new SmfTrack ();
+				foreach (var e in dump.Results) {
+					if (e.SysEx != null)
+						track.Events.Add (new SmfEvent (e.Timestamp, new SmfMessage (0xF0, 0, 0, e.SysEx)));
+					else
+						track.Events.Add (new SmfEvent (e.Timestamp, new SmfMessage (e.Message.Value)));
+				}
+				music.Tracks.Add (track);
+				using (var f = File.OpenWrite (s))
+					new SmfWriter (f).WriteMusic (music);
+			}
 		}
 	}
 
 	public class BulkDump
 	{
-		public void Run (int indev, int outdev)
+		public BulkDump ()
 		{
-			var sysex = new byte [] {
-				0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
-				// addr
-				0x0C, 0x00, 0x00,
-				// size
-				0x00, 0x00, 0x00,
-				// chksum/EOX
-				0, 0xF7 };
-			int chksum = 0;
-			for (int i = 5; i < 11; i++)
-				chksum += sysex [i];
-			sysex [sysex.Length - 2] = (byte) (0x80 - chksum % 0x80);
-foreach (var bbb in sysex) Console.Write ("{0:X02} ", bbb);
+			Interval = TimeSpan.FromMilliseconds (300);
+		}
+
+		static readonly byte [] sc88 = new byte [] {
+			0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
+			// addr
+			0x0C, 0x00, 0x00,
+			// size
+			0x00, 0x00, 0x00,
+			// chksum/EOX
+			0x74, 0xF7 };
+
+		byte [] sysex = sc88;
+
+		public void SetSysEx (byte [] data)
+		{
+			if (data == null)
+				throw new ArgumentNullException ("data");
+			sysex = data;
+		}
+
+		MidiInput input_device;
+
+		public void Start (int indev, int outdev)
+		{
 			using (var output = MidiDeviceManager.OpenOutput (outdev))
 				output.WriteSysEx (0, sysex);
-			Console.WriteLine ("Sent dump operation. Type [CR] to stop receive.");
-			var dev = MidiDeviceManager.OpenInput (indev);
+			input_device = MidiDeviceManager.OpenInput (indev);
 			new Action (delegate {
 				try {
-					Loop (dev);
+					Loop ();
 				} catch (Exception ex) {
 					Console.WriteLine ("ERROR INSIDE THE LOOP: " + ex);
 				}
 				wait_handle.Set ();
 				}).BeginInvoke (null, null);
-			Console.ReadLine ();
+		}
+
+		public void Stop ()
+		{
 			loop = false;
 			wait_handle.WaitOne ();
-			dev.Close ();
+			input_device.Close ();
 		}
+
+		public TimeSpan Interval { get; set; }
 
 		ManualResetEvent wait_handle = new ManualResetEvent (false);
 		bool loop = true;
 		List<MidiEvent> results = new List<MidiEvent> ();
 
-		void Loop (MidiInput dev)
+		public IList<MidiEvent> Results { get { return results; } }
+
+		void Loop ()
 		{
-			int idx = 0, idx2 = 0;
+			int idx = 0;
 			byte [] buf = new byte [0x10000];
 			while (loop) {
-				Thread.Sleep (300); // some interval is required to stably receive messages...
-				int size = dev.Read (buf, idx, buf.Length - idx);
+				Thread.Sleep ((int) Interval.TotalMilliseconds); // some interval is required to stably receive messages...
+				int size = input_device.Read (buf, idx, buf.Length - idx);
 // if (size > 0) {
 // Console.WriteLine ("Read {0} bytes", size);
 // for (int z = idx; z < idx + size; z++) Console.Write ("{0:X02} ", buf [z]);
 // Console.WriteLine (); 
 // }
 				idx += size;
-				if (size > 0 && (buf [idx2] != 0xF0 || size > 10)) {
-// if (buf [idx2] != 0xF0) Console.WriteLine ("##### {0:X02} {1:X02}", buf [idx2], buf [idx2 + 1]); else Console.WriteLine ("$$$$$ {0}", size);
-					foreach (var ev in MidiInput.Convert (buf, idx2, idx - idx2))
-						results.Add (ev);
-					idx2 = idx;
-				}
+				foreach (var ev in MidiInput.Convert (buf, idx, size))
+					results.Add (ev);
 			}
 		}
 	}
