@@ -1,5 +1,8 @@
 This is a simple bulk dump tool.
 
+to build the executable, run:
+	gmcs bulkdump.cs ../SMF.cs ../../PortMidiSharp.cs
+
 example usage:
 
 	mono bulkdump.exe --file:sc8820.bin --in:1 --out:5 --interval:500 --sysex:F0,41,10,42,11,0C,00,04,00,00,00,70,F7

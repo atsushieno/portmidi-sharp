@@ -103,9 +103,10 @@ namespace Commons.Music.Midi
 		public BulkDump ()
 		{
 			Interval = TimeSpan.FromMilliseconds (500);
+			BufferSize = 10000;
 		}
 
-		static readonly byte [] sc88all = new byte [] {
+		static readonly byte [] gsall = new byte [] {
 			0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
 			// addr
 			0x0C, 0x00, 0x00,
@@ -113,16 +114,8 @@ namespace Commons.Music.Midi
 			0x00, 0x00, 0x00,
 			// chksum/EOX
 			0x74, 0xF7 };
-		static readonly byte [] sc88tone = new byte [] {
-			0xF0, 0x41, 0x10, 0x42, 0x11, // dev/cmd
-			// addr
-			0x0C, 0x00, 0x01,
-			// size
-			0x00, 0x00, 0x00,
-			// chksum/EOX
-			0x73, 0xF7 };
 
-		byte [] sysex = sc88tone;
+		byte [] sysex = gsall;
 
 		public void SetSysEx (byte [] data)
 		{
@@ -137,7 +130,7 @@ namespace Commons.Music.Midi
 		{
 			using (var output = MidiDeviceManager.OpenOutput (outdev))
 				output.WriteSysEx (0, sysex);
-			input_device = MidiDeviceManager.OpenInput (indev);
+			input_device = MidiDeviceManager.OpenInput (indev, BufferSize);
 			new Action (delegate {
 				try {
 					Loop ();
@@ -157,6 +150,8 @@ namespace Commons.Music.Midi
 
 		public TimeSpan Interval { get; set; }
 
+		public int BufferSize { get; set; }
+
 		ManualResetEvent wait_handle = new ManualResetEvent (false);
 		bool loop = true;
 		List<MidiEvent> results = new List<MidiEvent> ();
@@ -165,9 +160,10 @@ namespace Commons.Music.Midi
 
 		void Loop ()
 		{
-			byte [] buf = new byte [0x10000];
+			byte [] buf = new byte [BufferSize];
 			while (loop) {
-				Thread.Sleep ((int) Interval.TotalMilliseconds); // some interval is required to stably receive messages...
+				// some interval is required to stably receive messages...
+				Thread.Sleep ((int) Interval.TotalMilliseconds);
 				int size = input_device.Read (buf, 0, buf.Length);
 //for (int i = 0; i < size; i++) Console.Write ("{0:X02} ", buf [i]);
 				foreach (var ev in MidiInput.Convert (buf, 0, size))

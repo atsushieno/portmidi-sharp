@@ -211,9 +211,15 @@ namespace PortMidiSharp
 
 		public int Read (byte [] buffer, int index, int length)
 		{
-			unsafe {
-				fixed (byte *ptr = buffer)
-					return PortMidiMarshal.Pm_Read (stream, ptr + index, length);
+			var gch = GCHandle.Alloc (buffer);
+			try {
+				var ptr = Marshal.UnsafeAddrOfPinnedArrayElement (buffer, index);
+				int size = PortMidiMarshal.Pm_Read (stream, ptr, length);
+				if (size < 0)
+					throw new MidiException ((MidiErrorType) size, PortMidiMarshal.Pm_GetErrorText ((PmError) size));
+				return size;
+			} finally {
+				gch.Free ();
 			}
 		}
 	}
@@ -350,15 +356,15 @@ namespace PortMidiSharp
 
 		// TODO
 		[DllImport ("portmidi")]
-		static extern int Pm_HasHostError (PortMidiStream stream);
+		public static extern int Pm_HasHostError (PortMidiStream stream);
 
 		// TODO
 		[DllImport ("portmidi")]
-		static extern string Pm_GetErrorText (PmError errnum);
+		public static extern string Pm_GetErrorText (PmError errnum);
 
 		// TODO
 		[DllImport ("portmidi")]
-		static extern void Pm_GetHostErrorText (IntPtr msg, uint len);
+		public static extern void Pm_GetHostErrorText (IntPtr msg, uint len);
 
 		const int HDRLENGTH = 50;
 		const uint PM_HOST_ERROR_MSG_LEN = 256;
@@ -421,7 +427,7 @@ namespace PortMidiSharp
 		public static int Pm_MessageData2 (int msg) { return (((msg) >> 16) & 0xFF); }
 
 		[DllImport ("portmidi")]
-		public static unsafe extern int Pm_Read (PortMidiStream stream, byte * buffer, int length);
+		public static extern int Pm_Read (PortMidiStream stream, IntPtr buffer, int length);
 
 		[DllImport ("portmidi")]
 		public static extern PmError Pm_Poll (PortMidiStream stream);
