@@ -186,7 +186,7 @@ namespace PortMidiSharp
 			int i = index;
 			int end = index + size;
 			while (i < end) {
-				if (bytes [i] == 0xF0) {
+				if (bytes [i] == 0xF0 || bytes [i] == 0xF7) {
 					var tmp = new byte [size];
 					Array.Copy (bytes, i, tmp, 0, tmp.Length);
 					yield return new MidiEvent () {Message = new MidiMessage (0xF0, 0, 0), SysEx = tmp};
@@ -217,7 +217,7 @@ namespace PortMidiSharp
 				int size = PortMidiMarshal.Pm_Read (stream, ptr, length);
 				if (size < 0)
 					throw new MidiException ((MidiErrorType) size, PortMidiMarshal.Pm_GetErrorText ((PmError) size));
-				return size;
+				return size * 4;
 			} finally {
 				gch.Free ();
 			}
@@ -243,14 +243,14 @@ namespace PortMidiSharp
 		{
 			var ret = PortMidiMarshal.Pm_WriteShort (stream, when, msg);
 			if (ret != PmError.NoError)
-				throw new MidiException (ret, String.Format ("Failed to write message {1} (error code {0})", ret, msg.Value));
+				throw new MidiException (ret, String.Format ("Failed to write message {0} : {1}", msg.Value, PortMidiMarshal.Pm_GetErrorText ((PmError) ret)));
 		}
 
 		public void WriteSysEx (PmTimestamp when, byte [] sysex)
 		{
 			var ret = PortMidiMarshal.Pm_WriteSysEx (stream, when, sysex);
 			if (ret != PmError.NoError)
-				throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
+				throw new MidiException (ret, String.Format ("Failed to write sysex message : {0}", PortMidiMarshal.Pm_GetErrorText ((PmError) ret)));
 		}
 
 		public void Write (MidiEvent [] buffer)
@@ -265,7 +265,7 @@ namespace PortMidiSharp
 				var ptr = Marshal.UnsafeAddrOfPinnedArrayElement (buffer, index);
 				var ret = PortMidiMarshal.Pm_Write (stream, ptr, length);
 				if (ret != PmError.NoError)
-					throw new MidiException (ret, String.Format ("Failed to write message (error code {0})", ret));
+					throw new MidiException (ret, String.Format ("Failed to write messages : {0}", PortMidiMarshal.Pm_GetErrorText ((PmError) ret)));
 			} finally {
 				gch.Free ();
 			}
