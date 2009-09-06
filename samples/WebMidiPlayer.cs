@@ -13,7 +13,18 @@ namespace Commons.Music.Midi.Player
 			client.Open ();
 
 			MessageReceived += delegate (SmfMessage msg) {
-				client.ProcessMessage (msg);
+				switch (msg.StatusByte) {
+				case 0xF0:
+				case 0xF7:
+					client.ProcessSysExMessage (msg.Data);
+					break;
+				case 0xFF:
+					// do nothing
+					break;
+				default:
+					client.ProcessMessage (msg.Value);
+					break;
+				}
 			};
 		}
 	}
@@ -22,7 +33,20 @@ namespace Commons.Music.Midi.Player
 	public interface IMidiDeviceContract
 	{
 		[OperationContract]
-		void ProcessMessage (SmfMessage msg);
+		void ProcessMessage (int msg);
+
+		[OperationContract]
+		void ProcessSysExMessage (byte [] data);
+
+		[OperationContract (AsyncPattern = true)]
+		IAsyncResult BeginProcessMessage (int msg, AsyncCallback callback, object state);
+
+		void EndProcessMessage (IAsyncResult result);
+
+		[OperationContract (AsyncPattern = true)]
+		IAsyncResult BeginProcessSysExMessage (byte [] data, AsyncCallback callback, object state);
+
+		void EndProcessSysExMessage (IAsyncResult result);
 	}
 
 	public interface IMidiDeviceClient : IMidiDeviceContract, IClientChannel

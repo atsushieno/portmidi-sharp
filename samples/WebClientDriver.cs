@@ -1,3 +1,4 @@
+// gmcs WebClientDriver.cs WebMidiPlayer.cs SMF.cs MidiPlayer.cs MidiMachine.cs -pkg:wcf
 using System;
 using System.IO;
 using System.ServiceModel;

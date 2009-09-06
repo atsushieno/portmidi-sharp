@@ -1,3 +1,5 @@
+// gmcs WebMidiPlayerService.cs SMF.cs MidiPlayer.cs MidiMachine.cs ../PortMidiSharp.cs -pkg:wcf
+
 using System;
 using System.ServiceModel;
 using PortMidiSharp;
