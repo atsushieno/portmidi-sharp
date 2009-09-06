@@ -48,6 +48,18 @@ namespace Commons.Music.Midi
 			SetupDeviceSelector ();
 			SetupToneSelector ();
 			SetupKeyboardLayout (KeyMap.JP106); // FIXME: make it customizible
+
+			var rb = new RadioButton () { Text = "Normal" };
+			rb.Location = new Point (30, 30);
+			rb.EnabledChanged += delegate { if (rb.Enabled) channel = 0; };
+			Controls.Add (rb);
+
+			var rb2 = new RadioButton () { Text = "Drum" };
+			rb2.Location = new Point (150, 30);
+			rb2.EnabledChanged += delegate { if (rb2.Enabled) channel = 9; };
+			Controls.Add (rb2);
+
+			rb.Enabled = true;
 		}
 
 		void SetupMidiDevices ()
@@ -110,7 +122,7 @@ namespace Commons.Music.Midi
 				output = null;
 			}
 			output = MidiDeviceManager.OpenOutput (output_devices [deviceIndex].ID);
-			output.Write (0, new MidiMessage (0xC0, 0, 0));
+			output.Write (0, new MidiMessage (0xC0 + channel, 0, 0));
 		}
 
 		static readonly string [] tone_categories = {
@@ -146,7 +158,7 @@ namespace Commons.Music.Midi
 				var mi = new MenuItem (tone_list [i]);
 				mi.Tag = i;
 				mi.Select += delegate {
-					output.Write (0, new MidiMessage (0xC0, (int) mi.Tag, 0));
+					output.Write (0, new MidiMessage (0xC0 + channel, (int) mi.Tag, 0));
 				};
 				sub.MenuItems.Add (mi);
 			}
@@ -158,7 +170,7 @@ namespace Commons.Music.Midi
 			cb.DropDownStyle = ComboBoxStyle.DropDownList;
 			cb.DataSource = tone_list;
 			cb.SelectedIndexChanged += delegate {
-				output.Write (0, new MidiMessage (0xC0, cb.SelectedIndex, 0));
+				output.Write (0, new MidiMessage (0xC0 + channel, cb.SelectedIndex, 0));
 			};
 			Controls.Add (cb);
 #endif
@@ -331,7 +343,7 @@ namespace Commons.Music.Midi
 				note = (octave + (low ? 0 : 1)) * 12 - 4 + transpose + nid;
 
 			if (0 <= note && note <= 128)
-				output.Write (0, new MidiMessage (down ? 0x90 : 0x80, note, 100));
+				output.Write (0, new MidiMessage ((down ? 0x90 : 0x80) + channel, note, 100));
 		}
 
 		class KeyMap
@@ -361,6 +373,7 @@ namespace Commons.Music.Midi
 		}
 
 		MidiOutput output;
+		int channel = 0;
 		int transpose;
 		int octave = 4; // lowest
 		List<MidiDeviceInfo> output_devices = new List<MidiDeviceInfo> ();
