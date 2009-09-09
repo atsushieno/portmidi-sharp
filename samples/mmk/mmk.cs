@@ -51,12 +51,12 @@ namespace Commons.Music.Midi
 
 			var rb = new RadioButton () { Text = "Normal" };
 			rb.Location = new Point (30, 30);
-			rb.EnabledChanged += delegate { if (rb.Enabled) channel = 0; };
+			rb.CheckedChanged += delegate { if (rb.Checked) channel = 0; };
 			Controls.Add (rb);
 
 			var rb2 = new RadioButton () { Text = "Drum" };
 			rb2.Location = new Point (150, 30);
-			rb2.EnabledChanged += delegate { if (rb2.Enabled) channel = 9; };
+			rb2.CheckedChanged += delegate { if (rb2.Checked) channel = 9; };
 			Controls.Add (rb2);
 
 			rb.Enabled = true;
