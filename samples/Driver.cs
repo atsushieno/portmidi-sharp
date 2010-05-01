@@ -19,35 +19,26 @@ namespace Commons.Music.Midi.Player
 	{
 		public static void Main (string [] args)
 		{
-			var output = MidiDeviceManager.OpenOutput (MidiDeviceManager.DefaultOutputDeviceID);
-
+			int outdev = MidiDeviceManager.DefaultOutputDeviceID;
+			var files = new List<string> ();
 			foreach (var arg in args) {
+				if (arg.StartsWith ("--device:")) {
+					if (!int.TryParse (arg.Substring (9), out outdev)) {
+						Console.WriteLine ("Specify device ID: ");
+						foreach (var dev in MidiDeviceManager.AllDevices)
+							if (dev.IsOutput)
+								Console.WriteLine ("{0}: {1}", dev.ID, dev.Name);
+						return;
+					}
+				}
+				else
+					files.Add (arg);
+			}
+			var output = MidiDeviceManager.OpenOutput (outdev);
+
+			foreach (var arg in files) {
 				var parser = new SmfReader (File.OpenRead (arg));
 				parser.Parse ();
-#if false
-/* // test reader/writer sanity
-				using (var outfile = File.Create ("testtest.mid")) {
-					var data = parser.Music;
-					var gen = new SmfWriter (outfile);
-					gen.WriteHeader (data.Format, (short)data.Tracks.Count, data.DeltaTimeSpec);
-					foreach (var tr in data.Tracks)
-						gen.WriteTrack (tr);
-				}
-*/
-// test merger/splitter
-/*
-				var merged = SmfTrackMerger.Merge (parser.Music);
-//				var result = merged;
-				var result = SmfTrackSplitter.Split (merged.Tracks [0].Events, parser.Music.DeltaTimeSpec);
-				using (var outfile = File.Create ("testtest.mid")) {
-					var gen = new SmfWriter (outfile);
-					gen.DisableRunningStatus = true;
-					gen.WriteHeader (result.Format, (short)result.Tracks.Count, result.DeltaTimeSpec);
-					foreach (var tr in result.Tracks)
-						gen.WriteTrack (tr);
-				}
-*/
-#else
 				var player = new PortMidiPlayer (output, parser.Music);
 				player.StartLoop ();
 				player.PlayAsync ();
@@ -67,7 +58,6 @@ namespace Commons.Music.Midi.Player
 					else
 						Console.WriteLine ("what do you mean by '{0}' ?", line);
 				}
-#endif
 			}
 		}
 	}

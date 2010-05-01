@@ -19,6 +19,30 @@ namespace Commons.Music.Midi.ModuleDatabase
 
 		[DataMember]
 		public IList<MidiModuleDefinition> Modules { get; private set; }
+
+		public void Save (string file)
+		{
+			using (var fs = File.OpenWrite (file))
+				Save (fs);
+		}
+
+		public void Save (Stream stream)
+		{
+			var ds = new DataContractJsonSerializer (typeof (MidiModuleDefinition));
+			ds.WriteObject (stream, this);
+		}
+
+		public static MidiModuleDatabase Load (string file)
+		{
+			using (var fs = File.OpenRead (file))
+				return Load (fs);
+		}
+
+		public static MidiModuleDatabase Load (Stream stream)
+		{
+			var ds = new DataContractJsonSerializer (typeof (MidiModuleDefinition));
+			return (MidiModuleDatabase) ds.ReadObject (stream);
+		}
 	}
 
 	[DataContract]
