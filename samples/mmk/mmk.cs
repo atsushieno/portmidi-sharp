@@ -146,7 +146,6 @@ namespace Commons.Music.Midi
 
 		void SetupToneSelector ()
 		{
-#if true
 			var tone = new MenuItem ("&Tone");
 			this.Menu.MenuItems.Add (tone);
 			MenuItem sub = null;
@@ -162,18 +161,6 @@ namespace Commons.Music.Midi
 				};
 				sub.MenuItems.Add (mi);
 			}
-#else
-			ComboBox cb = new ComboBox ();
-			cb.TabIndex = 3;
-			cb.Location = new Point (10, 40);
-			cb.Width = 200;
-			cb.DropDownStyle = ComboBoxStyle.DropDownList;
-			cb.DataSource = tone_list;
-			cb.SelectedIndexChanged += delegate {
-				output.Write (0, new MidiMessage (0xC0 + channel, cb.SelectedIndex, 0));
-			};
-			Controls.Add (cb);
-#endif
 		}
 
 #if CHROMA_TONE
