@@ -8,7 +8,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace Commons.Music.Midi.ModuleDatabase
+namespace Commons.Music.Midi
 {
 	static class XLinqExtensions
 	{

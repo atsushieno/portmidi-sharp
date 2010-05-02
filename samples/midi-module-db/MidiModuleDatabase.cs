@@ -8,7 +8,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace Commons.Music.Midi.ModuleDatabase
+namespace Commons.Music.Midi
 {
 	public abstract class MidiModuleDatabase
 	{
@@ -93,8 +93,13 @@ namespace Commons.Music.Midi.ModuleDatabase
 			Maps = new List<MidiInstrumentMap> ();
 		}
 
-		[DataMember]
 		public IList<MidiInstrumentMap> Maps { get; private set; }
+
+		[DataMember (Name = "Maps")]
+		MidiInstrumentMap [] maps {
+			get { return Maps.ToArray (); }
+			set { Maps = new List<MidiInstrumentMap> (value); }
+		}
 	}
 
 	[DataContract]
@@ -108,8 +113,13 @@ namespace Commons.Music.Midi.ModuleDatabase
 		[DataMember]
 		public string Name { get; set; }
 
-		[DataMember]
 		public IList<MidiProgramDefinition> Programs { get; private set; }
+
+		[DataMember (Name = "Programs")]
+		MidiProgramDefinition [] programs {
+			get { return Programs.ToArray (); }
+			set { Programs = new List<MidiProgramDefinition> (value); }
+		}
 	}
 
 	[DataContract]
@@ -124,8 +134,14 @@ namespace Commons.Music.Midi.ModuleDatabase
 		public string Name { get; set; }
 		[DataMember]
 		public int Index { get; set; }
-		[DataMember]
+
 		public IList<MidiBankDefinition> Banks { get; private set; }
+
+		[DataMember (Name = "Banks")]
+		MidiBankDefinition [] banks {
+			get { return Banks.ToArray (); }
+			set { Banks = new List<MidiBankDefinition> (value); }
+		}
 	}
 
 	[DataContract]
