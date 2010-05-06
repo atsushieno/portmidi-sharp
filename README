@@ -1,3 +1,8 @@
+*WARNING* : THIS IS AN OUTDATED MODULE REPOSITORY!
+Check out "managed-midi" repo as its new location.
+
+--------
+
 This is an attempt to use portmidi on Mono.
 
 Looks like portmidi project itself is trying to support managed
